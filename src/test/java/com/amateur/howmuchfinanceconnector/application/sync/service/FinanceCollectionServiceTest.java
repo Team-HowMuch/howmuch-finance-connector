@@ -79,6 +79,28 @@ class FinanceCollectionServiceTest {
         verify(store).fail(eq(task), eq(FinanceCollectionFailureCode.DEADLINE_EXCEEDED), eq(false), any(), any());
     }
 
+    @Test
+    void rejectsResultWhenDeadlineExpiresDuringExternalCall() {
+        Clock clock = mock(Clock.class);
+        when(clock.instant()).thenReturn(
+                Instant.parse("2026-09-09T00:00:00Z"),
+                Instant.parse("2026-09-09T00:11:00Z"),
+                Instant.parse("2026-09-09T00:11:00Z"));
+        when(clock.getZone()).thenReturn(ZoneOffset.UTC);
+        var deadlineStore = mock(FinanceCollectionExecutionStore.class);
+        var deadlineCollector = mock(BankTransactionCollector.class);
+        var deadlineService = new FinanceCollectionService(deadlineStore, deadlineCollector, clock);
+        FinanceCollectionTask task = task(LocalDateTime.of(2026, 9, 9, 0, 10));
+        when(deadlineStore.claimNextExecution(any())).thenReturn(Optional.of(task));
+        when(deadlineCollector.collect(task)).thenReturn(List.of(transaction("provider-id")));
+
+        deadlineService.collectNext();
+
+        verify(deadlineStore, never()).complete(any(), any(), any());
+        verify(deadlineStore).fail(eq(task), eq(FinanceCollectionFailureCode.DEADLINE_EXCEEDED),
+                eq(false), any(), any());
+    }
+
     private FinanceCollectionTask task(LocalDateTime deadlineAt) {
         return new FinanceCollectionTask(
                 UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(), 1,

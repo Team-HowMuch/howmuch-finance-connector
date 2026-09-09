@@ -2,10 +2,14 @@ package com.amateur.howmuchfinanceconnector;
 
 import com.amateur.howmuchfinanceconnector.adapter.in.kafka.FinanceSyncCommandParser;
 import com.amateur.howmuchfinanceconnector.application.port.in.sync.AcceptFinanceSyncCommandUseCase;
+import com.amateur.howmuchfinanceconnector.application.port.in.sync.CollectNextFinanceExecutionUseCase;
 import com.amateur.howmuchfinanceconnector.application.port.in.sync.PublishNextFinanceEventUseCase;
+import com.amateur.howmuchfinanceconnector.application.port.out.sync.BankTransactionCollector;
 import com.amateur.howmuchfinanceconnector.application.port.out.sync.FinanceCollectionExecutionStore;
 import com.amateur.howmuchfinanceconnector.application.sync.FinanceCommandRejectedException;
+import com.amateur.howmuchfinanceconnector.application.sync.FinanceCollectionException;
 import com.amateur.howmuchfinanceconnector.domain.sync.CollectedBankTransaction;
+import com.amateur.howmuchfinanceconnector.domain.sync.FinanceCollectionFailureCode;
 import com.amateur.howmuchfinanceconnector.domain.sync.FinanceTransactionDirection;
 import com.networknt.schema.InputFormat;
 import com.networknt.schema.Schema;
@@ -16,6 +20,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -23,9 +28,13 @@ import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.apache.kafka.common.serialization.StringDeserializer;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Primary;
+import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.kafka.KafkaContainer;
@@ -60,6 +69,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 @Testcontainers
 @ActiveProfiles("test")
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+@Import(FinanceCommandIntakeIntegrationTest.TestCollectionConfig.class)
 class FinanceCommandIntakeIntegrationTest {
 
     private static final String TOKEN = "test-service-token";
@@ -102,6 +112,9 @@ class FinanceCommandIntakeIntegrationTest {
 
     @Autowired
     private FinanceCollectionExecutionStore collectionStore;
+
+    @Autowired
+    private CollectNextFinanceExecutionUseCase collectionWorker;
 
     @Autowired
     private PublishNextFinanceEventUseCase eventRelay;
@@ -236,8 +249,10 @@ class FinanceCommandIntakeIntegrationTest {
         while (eventRelay.publishNext()) {
             // Drain the outbox for this isolated test database.
         }
-        assertThat(kafkaEvents(syncJobId)).hasSize(4).allSatisfy(record ->
-                assertThat(record.key()).isEqualTo(ACCOUNT_REF.toString()));
+        assertThat(kafkaEvents(syncJobId)).hasSize(4).allSatisfy(record -> {
+            assertThat(record.key()).isEqualTo(ACCOUNT_REF.toString());
+            assertThat(record.value().getBytes(StandardCharsets.UTF_8)).hasSizeLessThanOrEqualTo(256 * 1024);
+        });
     }
 
     @Test
@@ -245,9 +260,7 @@ class FinanceCommandIntakeIntegrationTest {
         assertThat(putConnection(TOKEN).statusCode()).isEqualTo(200);
         UUID syncJobId = UUID.randomUUID();
         commandUseCase.accept(parser.parse(ACCOUNT_REF.toString(), commandPayload(UUID.randomUUID(), syncJobId, 1)));
-        var task = collectionStore.claimNextExecution(LocalDateTime.now(ZoneOffset.UTC)).orElseThrow();
-
-        collectionStore.complete(task, List.of(), LocalDateTime.now(ZoneOffset.UTC));
+        assertThat(collectionWorker.collectNext()).isTrue();
 
         assertThat(jdbc.sql("""
                         SELECT event_type FROM finance_event_outbox
@@ -260,6 +273,26 @@ class FinanceCommandIntakeIntegrationTest {
                         FROM collection_executions WHERE sync_job_id = :syncJobId
                         """)
                 .param("syncJobId", syncJobId).query(String.class).single()).isEqualTo("0:0");
+    }
+
+    @Test
+    void rejectsCompletionAfterConnectionIsRevoked() throws Exception {
+        assertThat(putConnection(TOKEN).statusCode()).isEqualTo(200);
+        UUID syncJobId = UUID.randomUUID();
+        commandUseCase.accept(parser.parse(ACCOUNT_REF.toString(), commandPayload(UUID.randomUUID(), syncJobId, 1)));
+        var task = collectionStore.claimNextExecution(LocalDateTime.now(ZoneOffset.UTC)).orElseThrow();
+        assertThat(deleteConnection(CONNECTION_REF).statusCode()).isEqualTo(204);
+
+        assertThatThrownBy(() -> collectionStore.complete(task, List.of(new CollectedBankTransaction(
+                "provider-id", LocalDateTime.now(ZoneOffset.UTC), FinanceTransactionDirection.INCOME,
+                BigDecimal.ONE, "KRW", BigDecimal.TEN, "입금")), LocalDateTime.now(ZoneOffset.UTC)))
+                .isInstanceOfSatisfying(FinanceCollectionException.class,
+                        exception -> assertThat(exception.failureCode())
+                                .isEqualTo(FinanceCollectionFailureCode.CONNECTION_REVOKED));
+        assertThat(jdbc.sql("""
+                        SELECT COUNT(*) FROM finance_event_outbox
+                        WHERE sync_job_id = :syncJobId AND event_type <> 'SyncAccepted'
+                        """).param("syncJobId", syncJobId).query(Integer.class).single()).isZero();
     }
 
     private HttpResponse<String> putConnection(String token) throws Exception {
@@ -407,6 +440,18 @@ class FinanceCommandIntakeIntegrationTest {
                     .digest(value.getBytes(StandardCharsets.UTF_8)));
         } catch (NoSuchAlgorithmException impossible) {
             throw new IllegalStateException(impossible);
+        }
+    }
+
+    @TestConfiguration(proxyBeanMethods = false)
+    static class TestCollectionConfig {
+        @Bean
+        @Primary
+        BankTransactionCollector bankTransactionCollector() {
+            return task -> {
+                assertThat(TransactionSynchronizationManager.isActualTransactionActive()).isFalse();
+                return List.of();
+            };
         }
     }
 }

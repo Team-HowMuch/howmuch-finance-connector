@@ -65,12 +65,18 @@ public class CodefBankTransactionCollector implements BankTransactionCollector {
         payload.put("inquiryType", "1");
 
         JsonNode response = post(payload);
+        JsonNode history = data(response).path("resTrHistoryList");
+        if (!history.isArray()) {
+            throw failure(FinanceCollectionFailureCode.INVALID_REQUEST, false,
+                    "CODEF 거래 응답 형식을 확인할 수 없습니다.");
+        }
         List<CollectedBankTransaction> transactions = new ArrayList<>();
-        for (JsonNode item : values(data(response).path("resTrHistoryList"))) {
-            CollectedBankTransaction transaction = transaction(item);
-            if (transaction != null) {
-                transactions.add(transaction);
+        for (JsonNode item : history) {
+            if (!item.isObject()) {
+                throw failure(FinanceCollectionFailureCode.INVALID_REQUEST, false,
+                        "CODEF 거래 응답 형식을 확인할 수 없습니다.");
             }
+            transactions.add(transaction(item));
         }
         return List.copyOf(transactions);
     }
@@ -116,7 +122,8 @@ public class CodefBankTransactionCollector implements BankTransactionCollector {
                 : in != null ? FinanceTransactionDirection.INCOME : null;
         BigDecimal amount = out != null ? out : in;
         if (bookedAt == null || direction == null || amount.signum() <= 0) {
-            return null;
+            throw failure(FinanceCollectionFailureCode.INVALID_REQUEST, false,
+                    "CODEF 거래 항목을 변환할 수 없습니다.");
         }
         return new CollectedBankTransaction(
                 null,
@@ -193,18 +200,6 @@ public class CodefBankTransactionCollector implements BankTransactionCollector {
     private JsonNode data(JsonNode response) {
         JsonNode data = response.path("data");
         return data.isMissingNode() || data.isNull() ? response : data;
-    }
-
-    private List<JsonNode> values(JsonNode node) {
-        if (node == null || node.isMissingNode() || node.isNull()) {
-            return List.of();
-        }
-        if (node.isArray()) {
-            List<JsonNode> values = new ArrayList<>();
-            node.forEach(values::add);
-            return values;
-        }
-        return node.isObject() ? List.of(node) : List.of();
     }
 
     private String text(JsonNode node, String field) {

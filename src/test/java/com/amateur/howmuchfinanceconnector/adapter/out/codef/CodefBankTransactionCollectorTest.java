@@ -99,6 +99,35 @@ class CodefBankTransactionCollectorTest {
                                 .isEqualTo(FinanceCollectionFailureCode.REAUTH_REQUIRED));
     }
 
+    @Test
+    void rejectsMissingHistoryAndInvalidItemsInsteadOfReportingAnEmptyCollection() {
+        FinanceCollectionTask task = task();
+        when(credentials.findActive(task.connectionRef(), task.accountRef(), task.connectionVersion()))
+                .thenReturn(Optional.of(new FinanceCollectionCredentialStore.EncryptedBankCredential(
+                        "connected", "0088", "account")));
+        when(cipher.decrypt(any())).thenReturn("decrypted");
+        when(client.post(eq("/v1/kr/bank/p/account/transaction-list"), any()))
+                .thenReturn(objectMapper.readTree("""
+                        {"result":{"code":"CF-00000"},"data":{}}
+                        """))
+                .thenReturn(objectMapper.readTree("""
+                        {"result":{"code":"CF-00000"},"data":{"resTrHistoryList":[{"resAccountTrDate":"bad"}]}}
+                        """))
+                .thenReturn(objectMapper.readTree("""
+                        {"result":{"code":"CF-00000"},"data":{"resTrHistoryList":[]}}
+                        """));
+
+        assertThatThrownBy(() -> collector.collect(task))
+                .isInstanceOfSatisfying(FinanceCollectionException.class,
+                        exception -> assertThat(exception.failureCode())
+                                .isEqualTo(FinanceCollectionFailureCode.INVALID_REQUEST));
+        assertThatThrownBy(() -> collector.collect(task))
+                .isInstanceOfSatisfying(FinanceCollectionException.class,
+                        exception -> assertThat(exception.failureCode())
+                                .isEqualTo(FinanceCollectionFailureCode.INVALID_REQUEST));
+        assertThat(collector.collect(task)).isEmpty();
+    }
+
     private FinanceCollectionTask task() {
         return new FinanceCollectionTask(
                 UUID.fromString("11111111-1111-4111-8111-111111111111"),

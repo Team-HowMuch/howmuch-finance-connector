@@ -43,7 +43,12 @@ public final class FinanceCollectionService implements CollectNextFinanceExecuti
             }
             List<CollectedBankTransaction> transactions = collector.collect(task.get());
             validate(transactions);
-            store.complete(task.get(), transactions, now());
+            LocalDateTime completedAt = now();
+            if (!task.get().deadlineAt().isAfter(completedAt)) {
+                throw failure(FinanceCollectionFailureCode.DEADLINE_EXCEEDED, false,
+                        "거래 수집 제한 시간을 초과했습니다.");
+            }
+            store.complete(task.get(), transactions, completedAt);
         } catch (FinanceCollectionException exception) {
             store.fail(task.get(), exception.failureCode(), exception.retryable(), exception.safeMessage(), now());
         } catch (RuntimeException exception) {

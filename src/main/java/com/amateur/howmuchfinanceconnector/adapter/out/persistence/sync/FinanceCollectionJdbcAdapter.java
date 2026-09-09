@@ -121,6 +121,7 @@ public class FinanceCollectionJdbcAdapter implements
             List<CollectedBankTransaction> transactions,
             LocalDateTime completedAt
     ) {
+        lockCurrentConnection(task);
         List<OutboxEvent> events = chunkEvents(task, transactions, completedAt);
         LocalDateTime completionTime = completedAt.plusNanos(events.size() * 1_000L);
         events.add(completedEvent(task, events.size(), transactions.size(), completionTime));
@@ -207,7 +208,7 @@ public class FinanceCollectionJdbcAdapter implements
                         rs.getObject("message_id", UUID.class),
                         rs.getObject("account_ref", UUID.class),
                         rs.getString("topic"),
-                        rs.getString("payload")))
+                        compactJson(rs.getString("payload"))))
                 .optional();
     }
 
@@ -254,6 +255,34 @@ public class FinanceCollectionJdbcAdapter implements
             chunkIndex++;
         }
         return events;
+    }
+
+    private void lockCurrentConnection(FinanceCollectionTask task) {
+        boolean current = jdbc.sql("""
+                        SELECT 1
+                        FROM financial_connections c
+                        JOIN connected_accounts a ON a.connection_ref = c.connection_ref
+                        WHERE c.connection_ref = :connectionRef
+                          AND a.account_ref = :accountRef
+                          AND c.connection_version = :connectionVersion
+                          AND a.connection_version = :connectionVersion
+                          AND c.active AND a.active
+                        FOR SHARE OF c, a
+                        """)
+                .param("connectionRef", task.connectionRef())
+                .param("accountRef", task.accountRef())
+                .param("connectionVersion", task.connectionVersion())
+                .query(Integer.class)
+                .optional()
+                .isPresent();
+        if (!current) {
+            throw new FinanceCollectionException(FinanceCollectionFailureCode.CONNECTION_REVOKED, false,
+                    "금융 연결이 해제되었거나 변경되었습니다.");
+        }
+    }
+
+    private String compactJson(String payload) {
+        return objectMapper.writeValueAsString(objectMapper.readTree(payload));
     }
 
     private String chunkPayload(

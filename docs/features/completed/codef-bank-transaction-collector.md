@@ -201,10 +201,10 @@ git status --short --untracked-files=all
 
 | 항목 | 결과 | 근거 |
 |---|---|---|
-| CODEF request/error mapping | Pass | 요청 body, KST→UTC, 입출금·잔액·설명, 재인증·연결 해제 단위 테스트 |
+| CODEF request/error mapping | Pass | 요청 body, KST→UTC, 입출금·잔액·설명, 재인증·연결 해제·비정상 응답 거부 단위 테스트 |
 | empty/ambiguous/stable fixture | Pass | 빈 결과 성공, ID 부재 `AMBIGUOUS`, 안정 ID 결과 검증 |
-| chunk/complete/fail persistence | Pass | PostgreSQL 18 Testcontainers에서 101건을 100/1건으로 분할하고 RC2 schema·key·terminal 상태 검증 |
-| Kafka outbox relay | Pass | Kafka 4.2.1 Testcontainers에서 4개 event와 `accountRef` key 검증 |
+| chunk/complete/fail persistence | Pass | PostgreSQL 18 Testcontainers에서 101건 분할, RC2 schema·key·terminal 상태와 연결 해제 후 완료 rollback 검증 |
+| Kafka outbox relay | Pass | Kafka 4.2.1 Testcontainers에서 4개 event의 `accountRef` key와 실제 wire 256KiB 이하 검증 |
 | 전체 build | Pass | `./gradlew clean build --no-daemon` (14 tasks) |
 
 ## 9. 진행 기록
@@ -213,6 +213,7 @@ git status --short --untracked-files=all
 |---|---|---|---|
 | 2026-09-09 | C3 PR #20 merge, Backend V2 CODEF 경로 조사 | collection ports와 CODEF client | 검증된 응답에 stable transaction ID와 pagination cursor 없음 |
 | 2026-09-09 | CODEF adapter, collection worker, RC2 outbox·Kafka relay와 통합 검증 완료 | C5 재시도·복구 | 실제 비어 있지 않은 계좌 카나리는 stable ID 확인 전 차단 |
+| 2026-09-09 | 독립 감사 P1 4건 보완: 완료 시 연결 재검증, 호출 후 deadline, strict 응답, wire byte 제한 | PR CI·merge | C5 복구 전 PROCESSING outbox 자동 회수 없음 |
 
 ## 10. 결정 기록
 
@@ -220,6 +221,8 @@ git status --short --untracked-files=all
 |---|---|---|---|
 | 2026-09-09 | CODEF 응답 필드를 안정 ID로 추정하지 않음 | fingerprint 중복 병합 위험을 제거하는 RC2 gate | 실제 응답 증거 후 adapter mapping 추가 |
 | 2026-09-09 | C4는 최초 시도만 수행 | retry/backoff/lease/DLT는 C5의 독립 범위 | 실패·중단 복구는 C5 전까지 제한됨 |
+| 2026-09-09 | 완료 transaction에서 연결·계좌 row를 다시 잠금 검증 | 외부 호출 중 revoke/version 변경 결과가 성공하는 race 차단 | 불일치는 chunk 없이 `CONNECTION_REVOKED` |
+| 2026-09-09 | CODEF 성공 응답은 명시적 배열과 모든 항목 변환을 요구 | malformed/부분 누락을 0건 성공으로 오인하지 않음 | 실제 빈 배열만 0건 성공 |
 
 ## 11. 완료 기록
 
