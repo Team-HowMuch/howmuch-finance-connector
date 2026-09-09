@@ -26,7 +26,17 @@ class FinanceConnectionServiceTest {
         var store = new InMemoryStore();
         var service = new FinanceConnectionService(
                 store,
-                plaintext -> "encrypted:" + plaintext,
+                new com.amateur.howmuchfinanceconnector.application.port.out.connection.ConnectionSecretCipher() {
+                    @Override
+                    public String encrypt(String plaintext) {
+                        return "encrypted:" + plaintext;
+                    }
+
+                    @Override
+                    public String decrypt(String ciphertext) {
+                        return ciphertext.substring("encrypted:".length());
+                    }
+                },
                 Clock.fixed(Instant.parse("2026-09-09T00:00:00Z"), ZoneOffset.UTC));
 
         var first = service.register(command("11"));
