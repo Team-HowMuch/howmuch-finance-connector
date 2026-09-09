@@ -1,0 +1,28 @@
+{
+  "messageId": "55555555-5555-4555-8555-555555555555",
+  "messageType": "TransactionsChunkCollected",
+  "schemaVersion": 1,
+  "occurredAt": "2026-09-09T00:00:05Z",
+  "syncJobId": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+  "accountRef": "22222222-2222-4222-8222-222222222222",
+  "syncVersion": 1,
+  "connectionVersion": 1,
+  "causationId": "11111111-1111-4111-8111-111111111111",
+  "traceId": "contract-example",
+  "data": {
+    "chunkIndex": 0,
+    "collectedAt": "2026-09-09T00:00:05Z",
+    "items": [
+      {
+        "transactionKey": "2458d7a30abcfae75e6dc3a968631e8d70f4e59928864e6ddf38998a6373fab8",
+        "providerTransactionId": "provider-tx-20260909-0001",
+        "bookedAt": "2026-09-08T15:15:00Z",
+        "direction": "EXPENSE",
+        "amount": "12500",
+        "currency": "KRW",
+        "balanceAfter": "87500",
+        "description": "편의점 생활비"
+      }
+    ]
+  }
+}
