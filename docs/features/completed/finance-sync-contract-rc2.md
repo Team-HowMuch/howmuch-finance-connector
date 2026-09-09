@@ -1,6 +1,6 @@
 # Feature Plan: 금융 거래 동기화 RC2 계약
 
-- Status: In Progress
+- Status: Completed
 - Last updated: 2026-09-09
 - Related issue: https://github.com/Team-HowMuch/howmuch-finance-connector/issues/15
 - Related ADR: N/A
@@ -17,10 +17,10 @@ C2 저장 schema와 C3 command intake가 같은 wire contract에 의존하므로
 
 ### 성공 기준
 
-- [ ] 5개 message type과 정상·빈 결과·최종 실패 example이 하나의 Draft 2020-12 schema로 검증된다.
-- [ ] 필수 필드, version, enum, 거래 키, chunk 개수 위반을 자동 테스트가 거부한다.
-- [ ] `com.amateur:howmuch-finance-contracts:1.0.0-rc.2` resource JAR을 GitHub Packages에 발행할 수 있다.
-- [ ] 안정적인 provider transaction ID가 확인되지 않은 현재 상태를 `AMBIGUOUS` canary gate로 기록한다.
+- [x] 5개 message type과 정상·빈 결과·최종 실패 example이 하나의 Draft 2020-12 schema로 검증된다.
+- [x] 필수 필드, version, enum, 거래 키, chunk 개수 위반을 자동 테스트가 거부한다.
+- [x] `com.amateur:howmuch-finance-contracts:1.0.0-rc.2` resource JAR을 GitHub Packages에 발행했다.
+- [x] 안정적인 provider transaction ID가 확인되지 않은 현재 상태를 `AMBIGUOUS` canary gate로 기록했다.
 
 ### 제외 범위
 
@@ -166,8 +166,8 @@ N/A
 - [x] Application Service (`N/A`)
 - [x] Output Adapters (`N/A`)
 - [x] Web Request/Response DTOs, Controllers, and Swagger (`N/A`)
-- [ ] Infra configuration and Bean wiring (`N/A` - Gradle publication만 구성)
-- [ ] Documentation and verification results
+- [x] Infra configuration and Bean wiring (`N/A` - Gradle publication만 구성)
+- [x] Documentation and verification results
 
 ### 예상 커밋 경계
 
@@ -193,26 +193,28 @@ git status --short --untracked-files=all
 
 ### 완료 조건
 
-- [ ] 목적의 실행 결과를 검증했다.
-- [ ] 정상·실패·경계 흐름을 검증했다.
-- [ ] schema와 example 문서가 실제 artifact와 일치함을 확인했다.
-- [ ] 실행하지 못한 검증과 이유를 기록했다.
+- [x] 목적의 실행 결과를 검증했다.
+- [x] 정상·실패·경계 흐름을 검증했다.
+- [x] schema와 example 문서가 실제 artifact와 일치함을 확인했다.
+- [x] 실행하지 못한 검증과 이유를 기록했다.
 
 ### 결과
 
 | 항목 | 결과 | 근거 |
 |---|---|---|
-| 정상·빈·실패 example | Pending |  |
-| 거부 계약 | Pending |  |
-| resource JAR | Pending |  |
-| 전체 build | Pending |  |
-| GitHub Packages publish | Pending | merge 후 workflow 확인 |
+| 정상·빈·실패 example | Pass | `:finance-contracts:test` 4개 테스트 통과 |
+| 거부 계약 | Pass | 필수 필드·version·enum·거래 키·chunk 상한 거부 확인 |
+| resource JAR | Pass | schema, mapping, 6개 example만 포함됨을 `jar tf`로 확인 |
+| 전체 build | Pass | PostgreSQL 18에서 `SPRING_PROFILES_ACTIVE=test ./gradlew clean build --no-daemon` 통과 |
+| GitHub Packages publish | Pass | tag `finance-contracts-v1.0.0-rc.2`, Actions run 34347372548 성공 |
 
 ## 9. 진행 기록
 
 | 날짜 | 완료 작업 | 다음 작업 | 발견 위험 |
 |---|---|---|---|
 | 2026-09-09 | Backend fixture와 CODEF 공식 sample 조사 | schema와 example 구현 | 개별 거래 안정 ID 및 pagination cursor 근거 없음 |
+| 2026-09-09 | RC2 schema·example·검증 테스트와 resource JAR 구현 | Packages 발행 | 256KiB 제한은 publisher runtime 검증 필요 |
+| 2026-09-09 | GitHub Packages 발행 및 전체 build·CI 검증 | C2 저장 schema | stable provider transaction ID 확인 전 카나리 차단 유지 |
 
 ## 10. 결정 기록
 
@@ -224,8 +226,8 @@ git status --short --untracked-files=all
 
 ## 11. 완료 기록
 
-- 완료일:
-- 최종 동작:
-- 미검증 항목:
+- 완료일: 2026-09-09
+- 최종 동작: RC2 schema와 example을 resource JAR으로 발행하고 Jackson 3 validator로 허용·거부 계약을 자동 검증한다.
+- 미검증 항목: 실제 CODEF 계좌 응답의 거래별 안정 ID와 pagination cursor
 - 남은 위험: stable provider transaction ID와 transaction-list pagination이 확인되지 않아 실제 카나리가 차단됨
 - 후속 작업: C2 금융 연결과 수집 실행 저장 schema
