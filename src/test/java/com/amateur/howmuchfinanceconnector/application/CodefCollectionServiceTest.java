@@ -17,6 +17,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import java.time.Instant;
 import org.junit.jupiter.api.Test;
 
 class CodefCollectionServiceTest {
@@ -30,6 +31,7 @@ class CodefCollectionServiceTest {
         when(execution.getConnectionRef()).thenReturn(connectionRef);
         when(execution.getConnectionVersion()).thenReturn(1L);
         when(execution.getAccountRef()).thenReturn(accountRef);
+        when(execution.getDeadlineAt()).thenReturn(Instant.now().plusSeconds(60));
 
         FinancialConnectionJpaEntity connection = mock(FinancialConnectionJpaEntity.class);
         when(connection.isActive()).thenReturn(true);
@@ -48,10 +50,11 @@ class CodefCollectionServiceTest {
         when(client.fetch(any(), any(), any(), any(), any()))
                 .thenReturn(List.of(new ObjectMapper().createObjectNode().put("resAccountOut", "1000")));
 
-        new CodefCollectionService(executions, connections, accounts, client, results).collect(jobId);
+        CollectionLease lease = new CollectionLease(jobId, 1);
+        new CodefCollectionService(executions, connections, accounts, client, results).collect(lease);
 
         verify(results).fail(
-                eq(jobId),
+                eq(lease),
                 eq("DATA_IDENTITY_AMBIGUOUS"),
                 eq("DATA_INVALID"),
                 eq("CONTACT_SUPPORT"),

@@ -34,10 +34,11 @@ public class CollectionResultStore {
     }
 
     @Transactional
-    public void completeEmpty(UUID syncJobId) {
+    public void completeEmpty(CollectionLease lease) {
+        UUID syncJobId = lease.syncJobId();
         CollectionExecutionJpaEntity execution = required(syncJobId);
         Instant now = Instant.now();
-        execution.collected(now);
+        execution.collected(lease.version(), now);
         ObjectNode data = objectMapper.createObjectNode();
         data.put("fromDate", execution.getFromDate().toString());
         data.put("toDate", execution.getToDate().toString());
@@ -48,10 +49,11 @@ public class CollectionResultStore {
     }
 
     @Transactional
-    public void fail(UUID syncJobId, String errorCode, String category, String suggestedAction, String safeMessage) {
+    public void fail(CollectionLease lease, String errorCode, String category, String suggestedAction, String safeMessage) {
+        UUID syncJobId = lease.syncJobId();
         CollectionExecutionJpaEntity execution = required(syncJobId);
         Instant now = Instant.now();
-        execution.failed(now);
+        execution.failed(lease.version(), now);
         ObjectNode data = objectMapper.createObjectNode();
         data.put("errorCode", errorCode);
         data.put("category", category);
@@ -62,8 +64,33 @@ public class CollectionResultStore {
         outbox.save(event(execution, "TransactionsSyncFailed", data, now));
     }
 
+    @Transactional
+    public void retryOrFail(CollectionLease lease, String errorCode) {
+        CollectionExecutionJpaEntity execution = required(lease.syncJobId());
+        Instant now = Instant.now();
+        if (execution.getPageAttemptCount() >= 3 || !now.isBefore(execution.getDeadlineAt())) {
+            fail(execution, lease.version(), errorCode, now);
+            return;
+        }
+        long baseDelaySeconds = execution.getPageAttemptCount() == 1 ? 2 : 8;
+        long jitterMillis = Math.floorMod(lease.syncJobId().hashCode(), 501);
+        execution.retry(lease.version(), now.plusSeconds(baseDelaySeconds).plusMillis(jitterMillis), now);
+    }
+
     private CollectionExecutionJpaEntity required(UUID syncJobId) {
         return executions.findById(syncJobId).orElseThrow(() -> new IllegalStateException("collection execution not found"));
+    }
+
+    private void fail(CollectionExecutionJpaEntity execution, long leaseVersion, String errorCode, Instant now) {
+        execution.failed(leaseVersion, now);
+        ObjectNode data = objectMapper.createObjectNode();
+        data.put("errorCode", errorCode);
+        data.put("category", "TEMPORARY");
+        data.put("automaticRetry", false);
+        data.put("suggestedAction", "RETRY");
+        data.put("safeMessage", "금융기관 조회에 실패했습니다. 잠시 후 다시 시도해 주세요.");
+        data.put("failedAt", now.toString());
+        outbox.save(event(execution, "TransactionsSyncFailed", data, now));
     }
 
     private OutboxEventJpaEntity event(

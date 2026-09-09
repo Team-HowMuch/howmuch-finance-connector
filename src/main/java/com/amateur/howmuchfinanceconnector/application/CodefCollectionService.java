@@ -6,6 +6,7 @@ import com.amateur.howmuchfinanceconnector.adapter.out.persistence.CollectionExe
 import com.amateur.howmuchfinanceconnector.adapter.out.persistence.CollectionExecutionJpaRepository;
 import com.amateur.howmuchfinanceconnector.adapter.out.persistence.ConnectedAccountJpaRepository;
 import com.amateur.howmuchfinanceconnector.adapter.out.persistence.FinancialConnectionJpaRepository;
+import java.time.Instant;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
 
@@ -32,15 +33,30 @@ public class CodefCollectionService {
         this.results = results;
     }
 
-    public void collect(UUID syncJobId) {
+    public void collect(CollectionLease lease) {
+        UUID syncJobId = lease.syncJobId();
         CollectionExecutionJpaEntity execution = executions.findById(syncJobId)
                 .orElseThrow(() -> new IllegalStateException("collection execution not found"));
+        if (!Instant.now().isBefore(execution.getDeadlineAt())) {
+            results.retryOrFail(lease, "COLLECTION_TIMED_OUT");
+            return;
+        }
         var connection = connections.findById(execution.getConnectionRef())
                 .filter(value -> value.isActive() && value.getConnectionVersion() == execution.getConnectionVersion())
-                .orElseThrow(() -> new IllegalStateException("connection is not active"));
+                .orElse(null);
         var account = accounts.findByAccountRefAndConnectionRefAndActiveTrue(
                         execution.getAccountRef(), execution.getConnectionRef())
-                .orElseThrow(() -> new IllegalStateException("account is not active"));
+                .orElse(null);
+        if (connection == null || account == null) {
+            results.fail(
+                    lease,
+                    "CONNECTION_REVOKED",
+                    "CONNECTION_REVOKED",
+                    "NONE",
+                    "금융 연결이 해제되어 동기화를 중단했습니다."
+            );
+            return;
+        }
         try {
             var transactions = codef.fetch(
                     connection.getConnectedId(),
@@ -51,7 +67,7 @@ public class CodefCollectionService {
             );
             if (!transactions.isEmpty()) {
                 results.fail(
-                        syncJobId,
+                        lease,
                         "DATA_IDENTITY_AMBIGUOUS",
                         "DATA_INVALID",
                         "CONTACT_SUPPORT",
@@ -59,16 +75,20 @@ public class CodefCollectionService {
                 );
                 return;
             }
-            results.completeEmpty(syncJobId);
+            results.completeEmpty(lease);
         } catch (CodefCollectionException exception) {
             boolean reauth = exception.getMessage().equals("CF-12801") || exception.getMessage().equals("CF-12834");
-            results.fail(
-                    syncJobId,
-                    reauth ? "AUTH_RECONNECT_REQUIRED" : exception.getMessage(),
-                    reauth ? "USER_ACTION_REQUIRED" : "TEMPORARY",
-                    reauth ? "RECONNECT" : "RETRY",
-                    reauth ? "금융 연결을 다시 인증해 주세요." : "금융기관 조회에 실패했습니다. 잠시 후 다시 시도해 주세요."
-            );
+            if (reauth) {
+                results.fail(
+                        lease,
+                        "AUTH_RECONNECT_REQUIRED",
+                        "USER_ACTION_REQUIRED",
+                        "RECONNECT",
+                        "금융 연결을 다시 인증해 주세요."
+                );
+            } else {
+                results.retryOrFail(lease, exception.getMessage());
+            }
         }
     }
 }

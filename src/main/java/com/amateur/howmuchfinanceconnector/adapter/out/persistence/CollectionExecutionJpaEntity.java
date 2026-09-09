@@ -98,14 +98,47 @@ public class CollectionExecutionJpaEntity {
     public LocalDate getFromDate() { return fromDate; }
     public LocalDate getToDate() { return toDate; }
     public String getStatus() { return status; }
+    public Instant getDeadlineAt() { return deadlineAt; }
+    public int getPageAttemptCount() { return pageAttemptCount; }
+    public long getLeaseVersion() { return leaseVersion; }
 
-    public void collected(Instant now) {
+    public long claim(Instant now, Instant leaseUntil) {
+        this.status = "COLLECTING";
+        this.pageAttemptCount++;
+        this.leaseVersion++;
+        this.leaseUntil = leaseUntil;
+        this.updatedAt = now;
+        return leaseVersion;
+    }
+
+    public void collected(long expectedLeaseVersion, Instant now) {
+        requireLease(expectedLeaseVersion, now);
         this.status = "COLLECTED";
+        this.leaseUntil = null;
         this.updatedAt = now;
     }
 
-    public void failed(Instant now) {
+    public void failed(long expectedLeaseVersion, Instant now) {
+        requireLease(expectedLeaseVersion, now);
         this.status = "FAILED";
+        this.leaseUntil = null;
         this.updatedAt = now;
+    }
+
+    public void retry(long expectedLeaseVersion, Instant nextAttemptAt, Instant now) {
+        requireLease(expectedLeaseVersion, now);
+        this.status = "RETRY";
+        this.nextAttemptAt = nextAttemptAt;
+        this.leaseUntil = null;
+        this.updatedAt = now;
+    }
+
+    private void requireLease(long expectedLeaseVersion, Instant now) {
+        if (!"COLLECTING".equals(status)
+                || leaseVersion != expectedLeaseVersion
+                || leaseUntil == null
+                || !leaseUntil.isAfter(now)) {
+            throw new IllegalStateException("collection lease is stale");
+        }
     }
 }

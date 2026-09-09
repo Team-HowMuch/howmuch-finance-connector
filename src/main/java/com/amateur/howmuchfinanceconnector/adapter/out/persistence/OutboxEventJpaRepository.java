@@ -12,4 +12,5 @@ public interface OutboxEventJpaRepository extends JpaRepository<OutboxEventJpaEn
             Instant now,
             Pageable pageable
     );
+    long deleteByStatusAndPublishedAtBefore(String status, Instant threshold);
 }
