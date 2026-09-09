@@ -1,6 +1,6 @@
 # Feature Plan: CODEF 은행 거래 수집과 결과 발행
 
-- Status: In Progress
+- Status: Completed
 - Last updated: 2026-09-09
 - Related issue: https://github.com/Team-HowMuch/howmuch-finance-connector/issues/21
 - Related ADR: N/A
@@ -17,11 +17,11 @@ Backend V2의 비동기 접수 전에 Connector가 수집 결과를 RC2로 반�
 
 ### 성공 기준
 
-- [ ] worker가 execution을 선점한 뒤 DB transaction 밖에서 CODEF를 호출한다.
-- [ ] 빈 결과는 `TransactionsCollectionCompleted(totalChunks=0,totalItems=0)`로 성공한다.
-- [ ] 안정 ID가 있는 fixture는 `SHA-256(accountRef + providerTransactionId)` key로 최대 100건/256KiB chunk를 만든다.
-- [ ] 안정 ID가 없는 거래가 하나라도 있으면 chunk 없이 `AMBIGUOUS`로 실패한다.
-- [ ] outbox relay가 Kafka key=`accountRef`로 RC2 event를 발행한다.
+- [x] worker가 execution을 선점한 뒤 DB transaction 밖에서 CODEF를 호출한다.
+- [x] 빈 결과는 `TransactionsCollectionCompleted(totalChunks=0,totalItems=0)`로 성공한다.
+- [x] 안정 ID가 있는 fixture는 `SHA-256(accountRef + providerTransactionId)` key로 최대 100건/256KiB chunk를 만든다.
+- [x] 안정 ID가 없는 거래가 하나라도 있으면 chunk 없이 `AMBIGUOUS`로 실패한다.
+- [x] outbox relay가 Kafka key=`accountRef`로 RC2 event를 발행한다.
 
 ### 제외 범위
 
@@ -89,10 +89,10 @@ Backend V2의 비동기 접수 전에 Connector가 수집 결과를 RC2로 반�
 
 ```text
 Scheduler -> CollectNextFinanceExecutionUseCase
-FinanceCollectionExecutionStore.claimNext -> FinanceCollectionTask
+FinanceCollectionExecutionStore.claimNextExecution -> FinanceCollectionTask
 BankTransactionCollector.collect -> CollectedBankTransaction[]
 Scheduler -> PublishNextFinanceEventUseCase
-FinanceEventOutboxStore.claimNext -> PendingFinanceEvent
+FinanceEventOutboxStore.claimNextEvent -> PendingFinanceEvent
 ```
 
 ### Output Ports
@@ -159,15 +159,15 @@ N/A — 신규 HTTP endpoint 없음
 ## 7. 구현 계획
 
 - [x] Migration-only pull request to `develop` (`N/A` - V3 재사용)
-- [ ] UseCase and Application Command/Result
-- [ ] Required Output Ports
-- [ ] Domain models and rules
+- [x] UseCase and Application Command/Result
+- [x] Required Output Ports
+- [x] Domain models and rules
 - [x] Application Policies (`N/A`)
-- [ ] Application Service
-- [ ] Output Adapters
+- [x] Application Service
+- [x] Output Adapters
 - [x] Web Request/Response DTOs, Controllers, and Swagger (`N/A`)
-- [ ] Infra configuration and Bean wiring
-- [ ] Documentation and verification results
+- [x] Infra configuration and Bean wiring
+- [x] Documentation and verification results
 
 ### 예상 커밋 경계
 
@@ -192,26 +192,27 @@ git status --short --untracked-files=all
 
 ### 완료 조건
 
-- [ ] 목적의 실행 결과를 검증했다.
-- [ ] 정상·실패·경계 흐름을 검증했다.
-- [ ] RC2 payload와 transaction key를 검증했다.
-- [ ] 실행하지 못한 검증과 이유를 기록했다.
+- [x] 목적의 실행 결과를 검증했다.
+- [x] 정상·실패·경계 흐름을 검증했다.
+- [x] RC2 payload와 transaction key를 검증했다.
+- [x] 실행하지 못한 검증과 이유를 기록했다.
 
 ### 결과
 
 | 항목 | 결과 | 근거 |
 |---|---|---|
-| CODEF request/error mapping | Pending |  |
-| empty/ambiguous/stable fixture | Pending |  |
-| chunk/complete/fail persistence | Pending |  |
-| Kafka outbox relay | Pending |  |
-| 전체 build | Pending |  |
+| CODEF request/error mapping | Pass | 요청 body, KST→UTC, 입출금·잔액·설명, 재인증·연결 해제 단위 테스트 |
+| empty/ambiguous/stable fixture | Pass | 빈 결과 성공, ID 부재 `AMBIGUOUS`, 안정 ID 결과 검증 |
+| chunk/complete/fail persistence | Pass | PostgreSQL 18 Testcontainers에서 101건을 100/1건으로 분할하고 RC2 schema·key·terminal 상태 검증 |
+| Kafka outbox relay | Pass | Kafka 4.2.1 Testcontainers에서 4개 event와 `accountRef` key 검증 |
+| 전체 build | Pass | `./gradlew clean build --no-daemon` (14 tasks) |
 
 ## 9. 진행 기록
 
 | 날짜 | 완료 작업 | 다음 작업 | 발견 위험 |
 |---|---|---|---|
 | 2026-09-09 | C3 PR #20 merge, Backend V2 CODEF 경로 조사 | collection ports와 CODEF client | 검증된 응답에 stable transaction ID와 pagination cursor 없음 |
+| 2026-09-09 | CODEF adapter, collection worker, RC2 outbox·Kafka relay와 통합 검증 완료 | C5 재시도·복구 | 실제 비어 있지 않은 계좌 카나리는 stable ID 확인 전 차단 |
 
 ## 10. 결정 기록
 
@@ -222,8 +223,8 @@ git status --short --untracked-files=all
 
 ## 11. 완료 기록
 
-- 완료일:
-- 최종 동작:
-- 미검증 항목:
+- 완료일: 2026-09-09
+- 최종 동작: Connector가 수집 execution을 선점해 CODEF 은행 거래를 조회하고, 검증된 결과만 RC2 chunk/completed 또는 failed outbox로 원자 저장한 뒤 Kafka에 발행한다.
+- 미검증 항목: 실제 CODEF 응답의 안정 provider transaction ID와 pagination cursor는 확인되지 않아 비어 있지 않은 실제 계좌 카나리를 수행하지 않았다. `bash scripts/test.sh`는 저장소에 script가 없어 실행하지 않았다.
 - 남은 위험: stable provider transaction ID 미확인으로 실제 비어 있지 않은 계좌 카나리 차단
 - 후속 작업: C5 금융 수집 재시도와 메시지 복구
