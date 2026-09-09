@@ -19,6 +19,10 @@ spring:
           time_zone: UTC
   flyway:
     enabled: true
+finance:
+  internal:
+    service-token: ${CONNECTOR_INTERNAL_SERVICE_TOKEN}
+    data-key: ${CONNECTOR_DATA_KEY}
 
 management:
   endpoints:
@@ -31,5 +35,6 @@ management:
         enabled: true
 
 server:
+  address: ${SERVER_ADDRESS:127.0.0.1}
   port: ${SERVER_PORT:8081}
   shutdown: graceful
