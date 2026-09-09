@@ -1,0 +1,4 @@
+CREATE TABLE finance_connector_bootstrap (
+    id SMALLINT PRIMARY KEY,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+);

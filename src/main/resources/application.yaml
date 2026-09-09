@@ -1,0 +1,22 @@
+spring:
+  application:
+    name: howmuch-finance-connector
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/howmuch_finance_connector}
+    username: ${DB_USERNAME:howmuch_finance_connector}
+    password: ${DB_PASSWORD:}
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+  flyway:
+    enabled: true
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+
+server:
+  port: ${SERVER_PORT:8081}
