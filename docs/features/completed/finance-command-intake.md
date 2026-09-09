@@ -1,6 +1,6 @@
 # Feature Plan: 금융 연결 등록과 수집 명령 접수
 
-- Status: In Progress
+- Status: Completed
 - Last updated: 2026-09-09
 - Related issue: https://github.com/Team-HowMuch/howmuch-finance-connector/issues/19
 - Related ADR: N/A
@@ -17,11 +17,11 @@ C4 수집기는 암호화된 연결 정보와 멱등하게 생성된 `collection
 
 ### 성공 기준
 
-- [ ] 동일한 연결 payload는 기존 `connectionVersion`을 반환하고, 연결 또는 활성 계좌 집합이 바뀔 때만 version을 증가시킨다.
-- [ ] 연결 등록 API는 loopback과 service token을 모두 요구한다.
-- [ ] `connectedId`와 provider account reference는 AES-GCM 암호문으로만 저장된다.
-- [ ] 동일 command 재전달은 inbox, execution, `SyncAccepted` outbox를 중복 생성하지 않는다.
-- [ ] RC2 위반, Kafka key 불일치, 비활성 또는 구버전 연결 command를 거부한다.
+- [x] 동일한 연결 payload는 기존 `connectionVersion`을 반환하고, 연결 또는 활성 계좌 집합이 바뀔 때만 version을 증가시킨다.
+- [x] 연결 등록 API는 loopback과 service token을 모두 요구한다.
+- [x] `connectedId`와 provider account reference는 AES-GCM 암호문으로만 저장된다.
+- [x] 동일 command 재전달은 inbox, execution, `SyncAccepted` outbox를 중복 생성하지 않는다.
+- [x] RC2 위반, Kafka key 불일치, 비활성 또는 구버전 연결 command를 거부한다.
 
 ### 제외 범위
 
@@ -174,15 +174,15 @@ Authentication: loopback + service token
 ## 7. 구현 계획
 
 - [x] Migration-only pull request to `develop` (`Required` - PR #18 merged)
-- [ ] UseCase and Application Command/Result
-- [ ] Required Output Ports
-- [ ] Domain models and rules
+- [x] UseCase and Application Command/Result
+- [x] Required Output Ports
+- [x] Domain models and rules
 - [x] Application Policies (`N/A` - 단일 aggregate 규칙)
-- [ ] Application Service
-- [ ] Output Adapters
-- [ ] Web Request/Response DTOs, Controllers, and Swagger (`Swagger N/A` - loopback internal API)
-- [ ] Infra configuration and Bean wiring
-- [ ] Documentation and verification results
+- [x] Application Service
+- [x] Output Adapters
+- [x] Web Request/Response DTOs, Controllers, and Swagger (`Swagger N/A` - loopback internal API)
+- [x] Infra configuration and Bean wiring
+- [x] Documentation and verification results
 
 ### 예상 커밋 경계
 
@@ -209,26 +209,27 @@ PostgreSQL 18과 Kafka 4.2.1 Testcontainers가 가능한 Docker 환경에서 실
 
 ### 완료 조건
 
-- [ ] 목적의 실행 결과를 검증했다.
-- [ ] 정상·실패·경계 흐름을 검증했다.
-- [ ] internal API와 RC2 contract가 구현과 일치한다.
-- [ ] 실행하지 못한 검증과 이유를 기록했다.
+- [x] 목적의 실행 결과를 검증했다.
+- [x] 정상·실패·경계 흐름을 검증했다.
+- [x] internal API와 RC2 contract가 구현과 일치한다.
+- [x] 실행하지 못한 검증과 이유를 기록했다.
 
 ### 결과
 
 | 항목 | 결과 | 근거 |
 |---|---|---|
-| 연결 등록·교체·해제 | Pending |  |
-| service token·loopback | Pending |  |
-| command parser·멱등 접수 | Pending |  |
-| PostgreSQL/Kafka 통합 | Pending |  |
-| 전체 build | Pending |  |
+| 연결 등록·교체·해제 | Pass | `FinanceConnectionServiceTest`, `FinanceCommandIntakeIntegrationTest` |
+| service token·loopback | Pass | `InternalServiceTokenFilterTest`, 실제 HTTP 401/200/204 |
+| command parser·멱등 접수 | Pass | RC2 parser 단위 테스트, 동일 payload와 새 messageId 재전달 통합 테스트 |
+| PostgreSQL/Kafka 통합 | Pass | Testcontainers `postgres:18`, `apache/kafka:4.2.1` |
+| 전체 build | Pass | `./gradlew clean build --no-daemon` (14 tasks) |
 
 ## 9. 진행 기록
 
 | 날짜 | 완료 작업 | 다음 작업 | 발견 위험 |
 |---|---|---|---|
 | 2026-09-09 | C2 V3 migration merge, RC1 호출 경로 조사 | 연결 Port와 내부 API 구현 | legacy RC1은 raw secret·JPA 직접 의존·Instant 사용 |
+| 2026-09-09 | 내부 연결 API·AES-GCM·RC2 Kafka intake·통합 검증 완료 | C4 CODEF 수집기 | DLT와 outbox relay는 후속 범위 |
 
 ## 10. 결정 기록
 
@@ -240,8 +241,8 @@ PostgreSQL 18과 Kafka 4.2.1 Testcontainers가 가능한 Docker 환경에서 실
 
 ## 11. 완료 기록
 
-- 완료일:
-- 최종 동작:
-- 미검증 항목:
+- 완료일: 2026-09-09
+- 최종 동작: Backend V2가 loopback 인증 API로 암호화 연결을 멱등 등록하고, Connector가 RC2 Kafka command를 원자적으로 inbox·execution·`SyncAccepted` outbox에 접수한다.
+- 미검증 항목: `bash scripts/test.sh`는 저장소에 script가 없어 실행하지 않았다.
 - 남은 위험: stable provider transaction ID 미확인으로 카나리 차단 유지
 - 후속 작업: C4 CODEF 은행 거래 수집과 결과 발행
