@@ -1,6 +1,6 @@
 # Feature Plan: V2 기반 금융 연동 서버 초기화
 
-- Status: In Progress
+- Status: Completed
 - Last updated: 2026-09-09
 - Related issue: https://github.com/Team-HowMuch/howmuch-finance-connector/issues/13
 - Related ADR: N/A
@@ -17,9 +17,9 @@ Backend V2의 동기화 저장 스키마가 병합되어 connector 후속 작업
 
 ### 성공 기준
 
-- [ ] 실제 PostgreSQL을 사용한 `./gradlew clean build --no-daemon`이 성공한다.
-- [ ] `/actuator/health`는 공개되고 그 외 요청은 차단된다.
-- [ ] `develop` 대상 pull request에서 동일한 빌드를 실행한다.
+- [x] 실제 PostgreSQL을 사용한 `./gradlew clean build --no-daemon`이 성공한다.
+- [x] `/actuator/health`는 공개되고 그 외 요청은 차단된다.
+- [x] `develop` 대상 pull request에서 동일한 빌드를 실행한다.
 
 ### 제외 범위
 
@@ -163,8 +163,8 @@ Authentication: 없음
 - [x] Application Service (`N/A` - orchestration 없음)
 - [x] Output Adapters (`N/A` - adapter 없음)
 - [x] Web Request/Response DTOs, Controllers, and Swagger (`N/A` - Actuator 기본 endpoint만 사용)
-- [ ] Infra configuration and Bean wiring
-- [ ] Documentation and verification results
+- [x] Infra configuration and Bean wiring
+- [x] Documentation and verification results
 
 ### 예상 커밋 경계
 
@@ -190,25 +190,27 @@ git status --short --untracked-files=all
 
 ### 완료 조건
 
-- [ ] 목적의 실행 결과를 검증했다.
-- [ ] 정상·실패·경계 흐름을 검증했다.
-- [ ] 문서가 실제 구성과 일치함을 확인했다.
-- [ ] 실행하지 못한 검증과 이유를 기록했다.
+- [x] 목적의 실행 결과를 검증했다.
+- [x] 정상·실패·경계 흐름을 검증했다.
+- [x] 문서가 실제 구성과 일치함을 확인했다.
+- [x] 실행하지 못한 검증과 이유를 기록했다.
 
 ### 결과
 
 | 항목 | 결과 | 근거 |
 |---|---|---|
-| 실제 PostgreSQL context | Pending |  |
-| health 공개 | Pending |  |
-| 기타 요청 차단 | Pending |  |
-| 전체 build | Pending |  |
+| 실제 PostgreSQL context | Pass | PostgreSQL 18에서 Flyway history 생성 및 Spring context 기동 |
+| health 공개 | Pass | 실제 HTTP `GET /actuator/health` 200 |
+| 기타 요청 차단 | Pass | 실제 HTTP `GET /actuator/info` 403 |
+| DB 장애 기동 차단 | Pass | 잘못된 DB URL에서 `FlywaySqlUnableToConnectToDbException`으로 context 실패 |
+| 전체 build | Pass | 로컬 `BUILD SUCCESSFUL`, GitHub Actions build 1m36s 통과 |
 
 ## 9. 진행 기록
 
 | 날짜 | 완료 작업 | 다음 작업 | 발견 위험 |
 |---|---|---|---|
 | 2026-09-09 | C0 범위와 제외 사항 기록 | 실행 기반 구현 | 기존 RC1 PR과 충돌하지 않도록 새 branch 사용 |
+| 2026-09-09 | 실행 기반·보안 경계·CI 구현 및 검증 | C0 PR 리뷰와 병합 | 업무 migration 없이 Flyway history만 생성됨 |
 
 ## 10. 결정 기록
 
@@ -219,8 +221,8 @@ git status --short --untracked-files=all
 
 ## 11. 완료 기록
 
-- 완료일:
-- 최종 동작:
-- 미검증 항목:
-- 남은 위험:
+- 완료일: 2026-09-09
+- 최종 동작: Spring Boot 4.1 connector가 PostgreSQL/Flyway와 함께 기동하며 health만 공개한다.
+- 미검증 항목: 없음
+- 남은 위험: 인증 및 Kafka 메시지 경계는 후속 이슈에서 구현·검증해야 한다.
 - 후속 작업: C1 RC2 계약 확정
