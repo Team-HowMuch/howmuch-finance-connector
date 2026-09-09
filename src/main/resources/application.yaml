@@ -32,6 +32,19 @@ finance:
   messaging:
     enabled: ${FINANCE_MESSAGING_ENABLED:false}
     command-topic: finance.sync.command.v1
+  collection:
+    enabled: ${FINANCE_COLLECTION_ENABLED:false}
+    poll-delay: ${FINANCE_COLLECTION_POLL_DELAY:500}
+  event-relay:
+    enabled: ${FINANCE_EVENT_RELAY_ENABLED:false}
+    poll-delay: ${FINANCE_EVENT_RELAY_POLL_DELAY:200}
+  codef:
+    base-url: ${CODEF_BASE_URL:https://development.codef.io}
+    oauth-url: ${CODEF_OAUTH_URL:https://oauth.codef.io/oauth/token}
+    client-id: ${CODEF_CLIENT_ID:}
+    client-secret: ${CODEF_CLIENT_SECRET:}
+    connect-timeout: ${CODEF_CONNECT_TIMEOUT:5s}
+    read-timeout: ${CODEF_READ_TIMEOUT:305s}
 
 management:
   endpoints:

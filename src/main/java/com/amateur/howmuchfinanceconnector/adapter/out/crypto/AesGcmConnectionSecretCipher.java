@@ -40,4 +40,23 @@ public final class AesGcmConnectionSecretCipher implements ConnectionSecretCiphe
             throw new IllegalStateException("Connection secret encryption failed", exception);
         }
     }
+
+    @Override
+    public String decrypt(String envelope) {
+        try {
+            String[] parts = envelope.split(":", 3);
+            if (parts.length != 3 || !"v1".equals(parts[0])) {
+                throw new IllegalArgumentException("Unsupported connection secret envelope");
+            }
+            byte[] nonce = Base64.getDecoder().decode(parts[1]);
+            if (nonce.length != NONCE_BYTES) {
+                throw new IllegalArgumentException("Invalid connection secret nonce");
+            }
+            Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
+            cipher.init(Cipher.DECRYPT_MODE, key, new GCMParameterSpec(TAG_BITS, nonce));
+            return new String(cipher.doFinal(Base64.getDecoder().decode(parts[2])), StandardCharsets.UTF_8);
+        } catch (GeneralSecurityException | IllegalArgumentException exception) {
+            throw new IllegalArgumentException("Connection secret decryption failed", exception);
+        }
+    }
 }
