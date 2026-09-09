@@ -1,5 +1,10 @@
 package com.amateur.howmuchfinanceconnector;
 
+import com.networknt.schema.InputFormat;
+import com.networknt.schema.Schema;
+import com.networknt.schema.SchemaLocation;
+import com.networknt.schema.SchemaRegistry;
+import com.networknt.schema.SpecificationVersion;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -69,6 +74,8 @@ class FinanceCommandIntakeIntegrationTest {
 
     private final HttpClient http = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5)).build();
     private final ObjectMapper objectMapper = new ObjectMapper();
+    private final Schema schema = SchemaRegistry.withDefaultDialect(SpecificationVersion.DRAFT_2020_12)
+            .getSchema(SchemaLocation.of("classpath:schemas/finance-sync-message-v1.schema.json"));
 
     @BeforeEach
     void cleanDatabase() {
@@ -103,8 +110,10 @@ class FinanceCommandIntakeIntegrationTest {
 
         assertThat(count("collection_executions")).isEqualTo(1);
         assertThat(count("finance_event_outbox")).isEqualTo(1);
-        assertThat(jdbc.sql("SELECT payload ->> 'messageType' FROM finance_event_outbox")
-                .query(String.class).single()).isEqualTo("SyncAccepted");
+        String acceptedPayload = jdbc.sql("SELECT payload::text FROM finance_event_outbox")
+                .query(String.class).single();
+        assertThat(schema.validate(acceptedPayload, InputFormat.JSON,
+                context -> context.executionConfig(config -> config.formatAssertionsEnabled(true)))).isEmpty();
 
         assertThat(deleteConnection().statusCode()).isEqualTo(204);
         assertThat(jdbc.sql("SELECT active FROM financial_connections")
