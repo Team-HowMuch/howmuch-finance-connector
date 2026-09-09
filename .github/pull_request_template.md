@@ -1,14 +1,14 @@
 ## Summary
 
-- 
+-
 
 ## 주요 변경
 
-- 
+-
 
 ## API 또는 Contract
 
-- 
+-
 
 ## Test plan
 
@@ -16,6 +16,6 @@
 
 ## Rollout and rollback
 
-- 
+-
 
 Closes #
