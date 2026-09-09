@@ -8,3 +8,5 @@ finance:
   internal:
     service-token: test-service-token
     data-key: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+  messaging:
+    enabled: false

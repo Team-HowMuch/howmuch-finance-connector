@@ -19,10 +19,19 @@ spring:
           time_zone: UTC
   flyway:
     enabled: true
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:127.0.0.1:9092}
+    consumer:
+      group-id: ${KAFKA_CONSUMER_GROUP:howmuch-finance-connector}
+      auto-offset-reset: earliest
+      enable-auto-commit: false
 finance:
   internal:
     service-token: ${CONNECTOR_INTERNAL_SERVICE_TOKEN}
     data-key: ${CONNECTOR_DATA_KEY}
+  messaging:
+    enabled: ${FINANCE_MESSAGING_ENABLED:false}
+    command-topic: finance.sync.command.v1
 
 management:
   endpoints:
