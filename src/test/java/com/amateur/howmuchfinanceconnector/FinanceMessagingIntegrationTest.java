@@ -38,6 +38,7 @@ import org.testcontainers.utility.DockerImageName;
 
 @Testcontainers(disabledWithoutDocker = true)
 @SpringBootTest(properties = {
+        "spring.datasource.driver-class-name=org.postgresql.Driver",
         "spring.jpa.hibernate.ddl-auto=validate",
         "spring.flyway.enabled=true",
         "finance.messaging.enabled=true",
