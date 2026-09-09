@@ -90,4 +90,22 @@ public class CollectionExecutionJpaEntity {
 
     public UUID getSyncJobId() { return syncJobId; }
     public String getRequestHash() { return requestHash; }
+    public UUID getCommandMessageId() { return commandMessageId; }
+    public UUID getAccountRef() { return accountRef; }
+    public UUID getConnectionRef() { return connectionRef; }
+    public long getSyncVersion() { return syncVersion; }
+    public long getConnectionVersion() { return connectionVersion; }
+    public LocalDate getFromDate() { return fromDate; }
+    public LocalDate getToDate() { return toDate; }
+    public String getStatus() { return status; }
+
+    public void collected(Instant now) {
+        this.status = "COLLECTED";
+        this.updatedAt = now;
+    }
+
+    public void failed(Instant now) {
+        this.status = "FAILED";
+        this.updatedAt = now;
+    }
 }

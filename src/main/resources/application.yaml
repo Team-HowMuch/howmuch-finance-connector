@@ -40,6 +40,15 @@ finance:
     event-topic: ${FINANCE_EVENT_TOPIC:finance.sync.event.v1}
     connector-group-id: ${FINANCE_CONNECTOR_GROUP_ID:finance-connector-sync-v1}
 
+external:
+  codef:
+    base-url: ${CODEF_BASE_URL:https://development.codef.io}
+    oauth-url: ${CODEF_OAUTH_URL:https://oauth.codef.io/oauth/token}
+    client-id: ${CODEF_CLIENT_ID:}
+    client-secret: ${CODEF_CLIENT_SECRET:}
+    encode-body: ${CODEF_ENCODE_BODY:true}
+    token-refresh-skew: ${CODEF_TOKEN_REFRESH_SKEW:60s}
+
 management:
   endpoints:
     web:

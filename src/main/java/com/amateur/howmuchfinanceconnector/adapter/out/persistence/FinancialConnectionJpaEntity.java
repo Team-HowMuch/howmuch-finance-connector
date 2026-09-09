@@ -88,4 +88,6 @@ public class FinancialConnectionJpaEntity {
     public int getConnectionVersion() { return connectionVersion; }
     public String getRequestHash() { return requestHash; }
     public boolean isActive() { return active; }
+    public String getConnectedId() { return connectedId; }
+    public String getOrganizationCode() { return organizationCode; }
 }
