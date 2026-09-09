@@ -9,14 +9,14 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
+import java.net.InetAddress;
+import java.net.UnknownHostException;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.util.List;
-import java.util.Set;
 
 public final class InternalServiceTokenFilter extends OncePerRequestFilter {
 
-    private static final Set<String> LOOPBACK_ADDRESSES = Set.of("127.0.0.1", "::1", "0:0:0:0:0:0:0:1");
     private final byte[] expectedToken;
 
     public InternalServiceTokenFilter(String expectedToken) {
@@ -37,8 +37,8 @@ public final class InternalServiceTokenFilter extends OncePerRequestFilter {
             HttpServletResponse response,
             FilterChain filterChain
     ) throws ServletException, IOException {
-        if (!LOOPBACK_ADDRESSES.contains(request.getRemoteAddr())) {
-            response.sendError(HttpServletResponse.SC_FORBIDDEN);
+        if (!isLoopback(request.getRemoteAddr())) {
+            response.setStatus(HttpServletResponse.SC_FORBIDDEN);
             return;
         }
 
@@ -47,12 +47,21 @@ public final class InternalServiceTokenFilter extends OncePerRequestFilter {
                 ? authorization.substring(7).getBytes(StandardCharsets.UTF_8)
                 : new byte[0];
         if (!MessageDigest.isEqual(expectedToken, actual)) {
-            response.sendError(HttpServletResponse.SC_UNAUTHORIZED);
+            response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
             return;
         }
 
-        SecurityContextHolder.getContext().setAuthentication(
-                UsernamePasswordAuthenticationToken.authenticated("backend-v2", "", List.of()));
+        var context = SecurityContextHolder.createEmptyContext();
+        context.setAuthentication(UsernamePasswordAuthenticationToken.authenticated("backend-v2", "", List.of()));
+        SecurityContextHolder.setContext(context);
         filterChain.doFilter(request, response);
+    }
+
+    private boolean isLoopback(String address) {
+        try {
+            return InetAddress.getByName(address).isLoopbackAddress();
+        } catch (UnknownHostException exception) {
+            return false;
+        }
     }
 }

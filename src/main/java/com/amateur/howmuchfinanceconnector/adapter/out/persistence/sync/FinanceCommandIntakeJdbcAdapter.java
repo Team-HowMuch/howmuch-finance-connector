@@ -34,7 +34,7 @@ public class FinanceCommandIntakeJdbcAdapter implements FinanceCommandIntakeStor
     }
 
     private void lock(UUID reference) {
-        jdbc.sql("SELECT pg_advisory_xact_lock(hashtextextended(CAST(:reference AS text), 0))")
+        jdbc.sql("SELECT 1 FROM pg_advisory_xact_lock(hashtextextended(CAST(:reference AS text), 0))")
                 .param("reference", reference)
                 .query(Long.class)
                 .single();

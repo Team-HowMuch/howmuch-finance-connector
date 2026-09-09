@@ -20,7 +20,7 @@ public class FinanceConnectionJdbcAdapter implements FinanceConnectionStore {
 
     @Override
     public void lock(UUID connectionRef) {
-        jdbc.sql("SELECT pg_advisory_xact_lock(hashtextextended(CAST(:connectionRef AS text), 0))")
+        jdbc.sql("SELECT 1 FROM pg_advisory_xact_lock(hashtextextended(CAST(:connectionRef AS text), 0))")
                 .param("connectionRef", connectionRef)
                 .query(Long.class)
                 .single();
