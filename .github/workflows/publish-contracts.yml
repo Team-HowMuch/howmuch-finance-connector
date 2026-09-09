@@ -1,0 +1,26 @@
+name: Publish finance contracts
+
+on:
+  push:
+    tags:
+      - finance-contracts-v*
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: gradle
+      - name: Validate and publish resource JAR
+        env:
+          GITHUB_ACTOR: ${{ github.actor }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: ./gradlew :finance-contracts:clean :finance-contracts:test :finance-contracts:publish --no-daemon
