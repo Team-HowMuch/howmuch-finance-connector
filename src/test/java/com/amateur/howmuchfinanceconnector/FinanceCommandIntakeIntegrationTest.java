@@ -1,5 +1,8 @@
 package com.amateur.howmuchfinanceconnector;
 
+import com.amateur.howmuchfinanceconnector.adapter.in.kafka.FinanceSyncCommandParser;
+import com.amateur.howmuchfinanceconnector.application.port.in.sync.AcceptFinanceSyncCommandUseCase;
+import com.amateur.howmuchfinanceconnector.application.sync.FinanceCommandRejectedException;
 import com.networknt.schema.InputFormat;
 import com.networknt.schema.Schema;
 import com.networknt.schema.SchemaLocation;
@@ -11,6 +14,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.jdbc.core.simple.JdbcClient;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
@@ -35,6 +39,7 @@ import java.time.ZoneId;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 @Testcontainers
 @ActiveProfiles("test")
@@ -44,6 +49,7 @@ class FinanceCommandIntakeIntegrationTest {
     private static final String TOKEN = "test-service-token";
     private static final UUID CONNECTION_REF = UUID.fromString("33333333-3333-4333-8333-333333333333");
     private static final UUID ACCOUNT_REF = UUID.fromString("22222222-2222-4222-8222-222222222222");
+    private static final UUID SECOND_ACCOUNT_REF = UUID.fromString("77777777-7777-4777-8777-777777777777");
 
     @Container
     static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer(DockerImageName.parse("postgres:18"))
@@ -72,6 +78,12 @@ class FinanceCommandIntakeIntegrationTest {
     @Autowired
     private KafkaTemplate<String, String> kafka;
 
+    @Autowired
+    private FinanceSyncCommandParser parser;
+
+    @Autowired
+    private AcceptFinanceSyncCommandUseCase commandUseCase;
+
     private final HttpClient http = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5)).build();
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final Schema schema = SchemaRegistry.withDefaultDialect(SpecificationVersion.DRAFT_2020_12)
@@ -89,6 +101,9 @@ class FinanceCommandIntakeIntegrationTest {
     @Test
     void registersEncryptedConnectionAndAcceptsDuplicateCommandOnlyOnce() throws Exception {
         assertThat(putConnection(null).statusCode()).isEqualTo(401);
+        assertThat(putRawConnection(CONNECTION_REF, """
+                {"connectedId":"id","organizationCode":"0088","accounts":[null]}
+                """, TOKEN).statusCode()).isEqualTo(400);
 
         HttpResponse<String> first = putConnection(TOKEN);
         HttpResponse<String> duplicate = putConnection(TOKEN);
@@ -115,14 +130,47 @@ class FinanceCommandIntakeIntegrationTest {
         assertThat(schema.validate(acceptedPayload, InputFormat.JSON,
                 context -> context.executionConfig(config -> config.formatAssertionsEnabled(true)))).isEmpty();
 
-        assertThat(deleteConnection().statusCode()).isEqualTo(204);
+        String competing = mutateCommand(command,
+                "66666666-6666-4666-8666-666666666666",
+                "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+                ACCOUNT_REF,
+                2,
+                1);
+        assertThatThrownBy(() -> commandUseCase.accept(parser.parse(ACCOUNT_REF.toString(), competing)))
+                .isInstanceOf(DataIntegrityViolationException.class);
+        assertThat(count("finance_command_inbox")).isEqualTo(2);
+
+        HttpResponse<String> changed = putConnection(CONNECTION_REF, SECOND_ACCOUNT_REF, TOKEN);
+        assertThat(changed.body()).contains("\"connectionVersion\":2", "\"changed\":true");
+        assertThat(active(ACCOUNT_REF)).isFalse();
+        assertThat(active(SECOND_ACCOUNT_REF)).isTrue();
+
+        UUID otherConnection = UUID.fromString("88888888-8888-4888-8888-888888888888");
+        HttpResponse<String> conflict = putConnection(otherConnection, SECOND_ACCOUNT_REF, TOKEN);
+        assertThat(conflict.statusCode()).isEqualTo(409);
+        assertThat(conflict.body()).contains("FINANCE_CONNECTION_ACCOUNT_CONFLICT");
+
+        assertThat(deleteConnection(CONNECTION_REF).statusCode()).isEqualTo(204);
         assertThat(jdbc.sql("SELECT active FROM financial_connections")
                 .query(Boolean.class).single()).isFalse();
-        assertThat(jdbc.sql("SELECT active FROM connected_accounts")
-                .query(Boolean.class).single()).isFalse();
+        assertThat(active(SECOND_ACCOUNT_REF)).isFalse();
+
+        String revoked = mutateCommand(command,
+                "99999999-9999-4999-8999-999999999999",
+                "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+                SECOND_ACCOUNT_REF,
+                1,
+                2);
+        assertThatThrownBy(() -> commandUseCase.accept(parser.parse(SECOND_ACCOUNT_REF.toString(), revoked)))
+                .isInstanceOf(FinanceCommandRejectedException.class);
+        assertThat(count("finance_command_inbox")).isEqualTo(2);
     }
 
     private HttpResponse<String> putConnection(String token) throws Exception {
+        return putConnection(CONNECTION_REF, ACCOUNT_REF, token);
+    }
+
+    private HttpResponse<String> putConnection(UUID connectionRef, UUID accountRef, String token) throws Exception {
         String body = """
                 {
                   "connectedId": "test-connected-id",
@@ -135,8 +183,12 @@ class FinanceCommandIntakeIntegrationTest {
                     "currency": "KRW"
                   }]
                 }
-                """.formatted(ACCOUNT_REF);
-        HttpRequest.Builder request = HttpRequest.newBuilder(uri("/internal/v1/connections/" + CONNECTION_REF))
+                """.formatted(accountRef);
+        return putRawConnection(connectionRef, body, token);
+    }
+
+    private HttpResponse<String> putRawConnection(UUID connectionRef, String body, String token) throws Exception {
+        HttpRequest.Builder request = HttpRequest.newBuilder(uri("/internal/v1/connections/" + connectionRef))
                 .timeout(Duration.ofSeconds(10))
                 .header("Content-Type", "application/json")
                 .PUT(HttpRequest.BodyPublishers.ofString(body));
@@ -146,8 +198,8 @@ class FinanceCommandIntakeIntegrationTest {
         return http.send(request.build(), HttpResponse.BodyHandlers.ofString());
     }
 
-    private HttpResponse<String> deleteConnection() throws Exception {
-        HttpRequest request = HttpRequest.newBuilder(uri("/internal/v1/connections/" + CONNECTION_REF))
+    private HttpResponse<String> deleteConnection(UUID connectionRef) throws Exception {
+        HttpRequest request = HttpRequest.newBuilder(uri("/internal/v1/connections/" + connectionRef))
                 .timeout(Duration.ofSeconds(10))
                 .header("Authorization", "Bearer " + TOKEN)
                 .DELETE()
@@ -180,12 +232,36 @@ class FinanceCommandIntakeIntegrationTest {
         return objectMapper.writeValueAsString(root);
     }
 
+    private String mutateCommand(
+            String command,
+            String messageId,
+            String syncJobId,
+            UUID accountRef,
+            long syncVersion,
+            long connectionVersion
+    ) {
+        ObjectNode root = (ObjectNode) objectMapper.readTree(command);
+        root.put("messageId", messageId);
+        root.put("syncJobId", syncJobId);
+        root.put("accountRef", accountRef.toString());
+        root.put("syncVersion", syncVersion);
+        root.put("connectionVersion", connectionVersion);
+        return objectMapper.writeValueAsString(root);
+    }
+
     private URI uri(String path) {
         return URI.create("http://127.0.0.1:" + port + path);
     }
 
     private int count(String table) {
         return jdbc.sql("SELECT COUNT(*) FROM " + table).query(Integer.class).single();
+    }
+
+    private boolean active(UUID accountRef) {
+        return jdbc.sql("SELECT active FROM connected_accounts WHERE account_ref = :accountRef")
+                .param("accountRef", accountRef)
+                .query(Boolean.class)
+                .single();
     }
 
     private void awaitCount(String table, int expected) throws InterruptedException {

@@ -58,6 +58,19 @@ class FinanceCommandIntakeServiceTest {
         verify(store, never()).createAcceptedExecution(org.mockito.ArgumentMatchers.any());
     }
 
+    @Test
+    void rejectsSameJobWithDifferentCommand() {
+        when(store.findInbox(MESSAGE_ID)).thenReturn(Optional.empty());
+        when(store.findExecution(JOB_ID))
+                .thenReturn(Optional.of(new FinanceCommandIntakeStore.ExecutionSnapshot("different")));
+
+        assertThatThrownBy(() -> service().accept(command(1)))
+                .isInstanceOf(FinanceCommandConflictException.class)
+                .hasMessageContaining("syncJobId");
+
+        verify(store, never()).createAcceptedExecution(org.mockito.ArgumentMatchers.any());
+    }
+
     private FinanceCommandIntakeService service() {
         return new FinanceCommandIntakeService(
                 store,

@@ -46,6 +46,28 @@ class FinanceSyncCommandParserTest {
                 .hasMessageContaining("날짜 범위");
     }
 
+    @Test
+    void rejectsSchemaViolationAndNonCommandMessage() throws IOException {
+        ObjectNode missingVersion = (ObjectNode) objectMapper.readTree(example());
+        missingVersion.remove("schemaVersion");
+
+        assertThatThrownBy(() -> parser.parse(
+                "22222222-2222-4222-8222-222222222222", objectMapper.writeValueAsString(missingVersion)))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("계약");
+
+        try (var input = getClass().getClassLoader().getResourceAsStream("examples/sync-accepted.json")) {
+            if (input == null) {
+                throw new IllegalStateException("Missing accepted example");
+            }
+            String accepted = new String(input.readAllBytes(), StandardCharsets.UTF_8);
+            assertThatThrownBy(() -> parser.parse(
+                    "22222222-2222-4222-8222-222222222222", accepted))
+                    .isInstanceOf(IllegalArgumentException.class)
+                    .hasMessageContaining("SyncAccountTransactions");
+        }
+    }
+
     private String example() throws IOException {
         try (var input = getClass().getClassLoader()
                 .getResourceAsStream("examples/sync-account-transactions.json")) {

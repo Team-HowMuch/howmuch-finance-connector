@@ -218,10 +218,10 @@ PostgreSQL 18과 Kafka 4.2.1 Testcontainers가 가능한 Docker 환경에서 실
 
 | 항목 | 결과 | 근거 |
 |---|---|---|
-| 연결 등록·교체·해제 | Pass | `FinanceConnectionServiceTest`, `FinanceCommandIntakeIntegrationTest` |
+| 연결 등록·교체·해제 | Pass | 동일 등록, 전체 계좌 교체·비활성화, 타 연결 `accountRef` 충돌, 해제 검증 |
 | service token·loopback | Pass | `InternalServiceTokenFilterTest`, 실제 HTTP 401/200/204 |
-| command parser·멱등 접수 | Pass | RC2 parser 단위 테스트, 동일 payload와 새 messageId 재전달 통합 테스트 |
-| PostgreSQL/Kafka 통합 | Pass | Testcontainers `postgres:18`, `apache/kafka:4.2.1` |
+| command parser·멱등 접수 | Pass | RC2 위반·비-command·key·날짜·version 거부, 동일 payload와 새 messageId 재전달 검증 |
+| PostgreSQL/Kafka 통합 | Pass | Testcontainers `postgres:18`, `apache/kafka:4.2.1`; execution 실패·연결 해제 시 inbox rollback 검증 |
 | 전체 build | Pass | `./gradlew clean build --no-daemon` (14 tasks) |
 
 ## 9. 진행 기록
