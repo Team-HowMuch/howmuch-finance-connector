@@ -2,7 +2,11 @@ package com.amateur.howmuchfinanceconnector;
 
 import com.amateur.howmuchfinanceconnector.adapter.in.kafka.FinanceSyncCommandParser;
 import com.amateur.howmuchfinanceconnector.application.port.in.sync.AcceptFinanceSyncCommandUseCase;
+import com.amateur.howmuchfinanceconnector.application.port.in.sync.PublishNextFinanceEventUseCase;
+import com.amateur.howmuchfinanceconnector.application.port.out.sync.FinanceCollectionExecutionStore;
 import com.amateur.howmuchfinanceconnector.application.sync.FinanceCommandRejectedException;
+import com.amateur.howmuchfinanceconnector.domain.sync.CollectedBankTransaction;
+import com.amateur.howmuchfinanceconnector.domain.sync.FinanceTransactionDirection;
 import com.networknt.schema.InputFormat;
 import com.networknt.schema.Schema;
 import com.networknt.schema.SchemaLocation;
@@ -15,7 +19,10 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.springframework.kafka.core.KafkaTemplate;
+import org.apache.kafka.common.serialization.StringDeserializer;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
@@ -31,12 +38,21 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.ZoneId;
+import java.time.ZoneOffset;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Properties;
 import java.util.UUID;
+import java.util.stream.IntStream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -83,6 +99,12 @@ class FinanceCommandIntakeIntegrationTest {
 
     @Autowired
     private AcceptFinanceSyncCommandUseCase commandUseCase;
+
+    @Autowired
+    private FinanceCollectionExecutionStore collectionStore;
+
+    @Autowired
+    private PublishNextFinanceEventUseCase eventRelay;
 
     private final HttpClient http = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5)).build();
     private final ObjectMapper objectMapper = new ObjectMapper();
@@ -166,6 +188,80 @@ class FinanceCommandIntakeIntegrationTest {
         assertThat(count("finance_command_inbox")).isEqualTo(2);
     }
 
+    @Test
+    void storesRc2ChunksAndPublishesThemWithAccountReferenceKey() throws Exception {
+        assertThat(putConnection(TOKEN).statusCode()).isEqualTo(200);
+        UUID messageId = UUID.randomUUID();
+        UUID syncJobId = UUID.randomUUID();
+        String command = commandPayload(messageId, syncJobId, 1);
+        commandUseCase.accept(parser.parse(ACCOUNT_REF.toString(), command));
+        var task = collectionStore.claimNextExecution(LocalDateTime.now(ZoneOffset.UTC)).orElseThrow();
+        List<CollectedBankTransaction> transactions = IntStream.range(0, 101)
+                .mapToObj(index -> new CollectedBankTransaction(
+                        "provider-transaction-" + index,
+                        LocalDateTime.of(2026, 9, 9, 0, 0).plusSeconds(index),
+                        FinanceTransactionDirection.EXPENSE,
+                        BigDecimal.valueOf(index + 1L),
+                        "KRW",
+                        BigDecimal.valueOf(100_000L - index),
+                        "거래 " + index))
+                .toList();
+
+        collectionStore.complete(task, transactions, LocalDateTime.now(ZoneOffset.UTC));
+
+        List<String> payloads = jdbc.sql("""
+                        SELECT payload::text FROM finance_event_outbox
+                        WHERE sync_job_id = :syncJobId AND event_type <> 'SyncAccepted'
+                        ORDER BY created_at, message_id
+                        """)
+                .param("syncJobId", syncJobId)
+                .query(String.class)
+                .list();
+        assertThat(payloads).hasSize(3);
+        payloads.forEach(payload -> assertThat(schema.validate(payload, InputFormat.JSON,
+                context -> context.executionConfig(config -> config.formatAssertionsEnabled(true)))).isEmpty());
+        ObjectNode firstChunk = (ObjectNode) objectMapper.readTree(payloads.getFirst());
+        ObjectNode secondChunk = (ObjectNode) objectMapper.readTree(payloads.get(1));
+        ObjectNode completed = (ObjectNode) objectMapper.readTree(payloads.getLast());
+        assertThat(firstChunk.path("data").path("items")).hasSize(100);
+        assertThat(secondChunk.path("data").path("items")).hasSize(1);
+        assertThat(completed.path("data").path("totalChunks").intValue()).isEqualTo(2);
+        assertThat(completed.path("data").path("totalItems").intValue()).isEqualTo(101);
+        assertThat(firstChunk.path("data").path("items").get(0).path("transactionKey").stringValue())
+                .isEqualTo(sha256(ACCOUNT_REF + "provider-transaction-0"));
+        assertThat(payloads.getFirst().getBytes(StandardCharsets.UTF_8)).hasSizeLessThanOrEqualTo(256 * 1024);
+        assertThat(jdbc.sql("SELECT status FROM collection_executions WHERE sync_job_id = :syncJobId")
+                .param("syncJobId", syncJobId).query(String.class).single()).isEqualTo("SUCCEEDED");
+
+        while (eventRelay.publishNext()) {
+            // Drain the outbox for this isolated test database.
+        }
+        assertThat(kafkaEvents(syncJobId)).hasSize(4).allSatisfy(record ->
+                assertThat(record.key()).isEqualTo(ACCOUNT_REF.toString()));
+    }
+
+    @Test
+    void storesEmptyCollectionAsCompletedWithoutChunks() throws Exception {
+        assertThat(putConnection(TOKEN).statusCode()).isEqualTo(200);
+        UUID syncJobId = UUID.randomUUID();
+        commandUseCase.accept(parser.parse(ACCOUNT_REF.toString(), commandPayload(UUID.randomUUID(), syncJobId, 1)));
+        var task = collectionStore.claimNextExecution(LocalDateTime.now(ZoneOffset.UTC)).orElseThrow();
+
+        collectionStore.complete(task, List.of(), LocalDateTime.now(ZoneOffset.UTC));
+
+        assertThat(jdbc.sql("""
+                        SELECT event_type FROM finance_event_outbox
+                        WHERE sync_job_id = :syncJobId AND event_type <> 'SyncAccepted'
+                        """)
+                .param("syncJobId", syncJobId).query(String.class).list())
+                .containsExactly("TransactionsCollectionCompleted");
+        assertThat(jdbc.sql("""
+                        SELECT total_chunk_count || ':' || total_transaction_count
+                        FROM collection_executions WHERE sync_job_id = :syncJobId
+                        """)
+                .param("syncJobId", syncJobId).query(String.class).single()).isEqualTo("0:0");
+    }
+
     private HttpResponse<String> putConnection(String token) throws Exception {
         return putConnection(CONNECTION_REF, ACCOUNT_REF, token);
     }
@@ -226,6 +322,14 @@ class FinanceCommandIntakeIntegrationTest {
         }
     }
 
+    private String commandPayload(UUID messageId, UUID syncJobId, long syncVersion) throws Exception {
+        ObjectNode root = (ObjectNode) objectMapper.readTree(commandPayload());
+        root.put("messageId", messageId.toString());
+        root.put("syncJobId", syncJobId.toString());
+        root.put("syncVersion", syncVersion);
+        return objectMapper.writeValueAsString(root);
+    }
+
     private String commandPayloadWithNewMessageId(String command) {
         ObjectNode root = (ObjectNode) objectMapper.readTree(command);
         root.put("messageId", "55555555-5555-4555-8555-555555555555");
@@ -273,5 +377,36 @@ class FinanceCommandIntakeIntegrationTest {
             Thread.sleep(100);
         }
         assertThat(count(table)).isEqualTo(expected);
+    }
+
+    private List<org.apache.kafka.clients.consumer.ConsumerRecord<String, String>> kafkaEvents(UUID syncJobId) {
+        Properties properties = new Properties();
+        properties.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, KAFKA.getBootstrapServers());
+        properties.put(ConsumerConfig.GROUP_ID_CONFIG, "finance-event-test-" + UUID.randomUUID());
+        properties.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
+        properties.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
+        properties.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
+        List<org.apache.kafka.clients.consumer.ConsumerRecord<String, String>> matching = new ArrayList<>();
+        try (var consumer = new KafkaConsumer<String, String>(properties)) {
+            consumer.subscribe(List.of("finance.sync.event.v1"));
+            long deadline = System.nanoTime() + Duration.ofSeconds(15).toNanos();
+            while (matching.size() < 4 && System.nanoTime() < deadline) {
+                consumer.poll(Duration.ofMillis(500)).forEach(record -> {
+                    if (objectMapper.readTree(record.value()).path("syncJobId").asText().equals(syncJobId.toString())) {
+                        matching.add(record);
+                    }
+                });
+            }
+        }
+        return matching;
+    }
+
+    private String sha256(String value) {
+        try {
+            return java.util.HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256")
+                    .digest(value.getBytes(StandardCharsets.UTF_8)));
+        } catch (NoSuchAlgorithmException impossible) {
+            throw new IllegalStateException(impossible);
+        }
     }
 }
