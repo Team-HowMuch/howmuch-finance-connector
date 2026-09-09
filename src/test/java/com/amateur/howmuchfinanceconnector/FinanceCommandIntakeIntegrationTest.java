@@ -249,10 +249,42 @@ class FinanceCommandIntakeIntegrationTest {
         while (eventRelay.publishNext()) {
             // Drain the outbox for this isolated test database.
         }
-        assertThat(kafkaEvents(syncJobId)).hasSize(4).allSatisfy(record -> {
+        assertThat(kafkaEvents(syncJobId, 4)).hasSize(4).allSatisfy(record -> {
             assertThat(record.key()).isEqualTo(ACCOUNT_REF.toString());
             assertThat(record.value().getBytes(StandardCharsets.UTF_8)).hasSizeLessThanOrEqualTo(256 * 1024);
         });
+    }
+
+    @Test
+    void splitsChunksBeforeKafkaPayloadExceedsByteLimit() throws Exception {
+        assertThat(putConnection(TOKEN).statusCode()).isEqualTo(200);
+        UUID syncJobId = UUID.randomUUID();
+        commandUseCase.accept(parser.parse(ACCOUNT_REF.toString(), commandPayload(UUID.randomUUID(), syncJobId, 1)));
+        var task = collectionStore.claimNextExecution(LocalDateTime.now(ZoneOffset.UTC)).orElseThrow();
+        BigDecimal largeInteger = new BigDecimal("1" + "0".repeat(9_999));
+        List<CollectedBankTransaction> transactions = IntStream.range(0, 20)
+                .mapToObj(index -> new CollectedBankTransaction(
+                        "large-provider-transaction-" + index,
+                        LocalDateTime.of(2026, 9, 9, 0, 0).plusSeconds(index),
+                        FinanceTransactionDirection.INCOME,
+                        largeInteger,
+                        "KRW",
+                        largeInteger,
+                        "대용량 거래"))
+                .toList();
+
+        collectionStore.complete(task, transactions, LocalDateTime.now(ZoneOffset.UTC));
+
+        int chunks = jdbc.sql("""
+                        SELECT COUNT(*) FROM finance_event_outbox
+                        WHERE sync_job_id = :syncJobId AND event_type = 'TransactionsChunkCollected'
+                        """).param("syncJobId", syncJobId).query(Integer.class).single();
+        assertThat(chunks).isGreaterThan(1);
+        while (eventRelay.publishNext()) {
+            // Drain the outbox for this isolated test database.
+        }
+        assertThat(kafkaEvents(syncJobId, chunks + 2)).hasSize(chunks + 2).allSatisfy(record ->
+                assertThat(record.value().getBytes(StandardCharsets.UTF_8)).hasSizeLessThanOrEqualTo(256 * 1024));
     }
 
     @Test
@@ -412,7 +444,10 @@ class FinanceCommandIntakeIntegrationTest {
         assertThat(count(table)).isEqualTo(expected);
     }
 
-    private List<org.apache.kafka.clients.consumer.ConsumerRecord<String, String>> kafkaEvents(UUID syncJobId) {
+    private List<org.apache.kafka.clients.consumer.ConsumerRecord<String, String>> kafkaEvents(
+            UUID syncJobId,
+            int expected
+    ) {
         Properties properties = new Properties();
         properties.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, KAFKA.getBootstrapServers());
         properties.put(ConsumerConfig.GROUP_ID_CONFIG, "finance-event-test-" + UUID.randomUUID());
@@ -423,7 +458,7 @@ class FinanceCommandIntakeIntegrationTest {
         try (var consumer = new KafkaConsumer<String, String>(properties)) {
             consumer.subscribe(List.of("finance.sync.event.v1"));
             long deadline = System.nanoTime() + Duration.ofSeconds(15).toNanos();
-            while (matching.size() < 4 && System.nanoTime() < deadline) {
+            while (matching.size() < expected && System.nanoTime() < deadline) {
                 consumer.poll(Duration.ofMillis(500)).forEach(record -> {
                     if (objectMapper.readTree(record.value()).path("syncJobId").asText().equals(syncJobId.toString())) {
                         matching.add(record);

@@ -203,7 +203,7 @@ git status --short --untracked-files=all
 |---|---|---|
 | CODEF request/error mapping | Pass | 요청 body, KST→UTC, 입출금·잔액·설명, 재인증·연결 해제·비정상 응답 거부 단위 테스트 |
 | empty/ambiguous/stable fixture | Pass | 빈 결과 성공, ID 부재 `AMBIGUOUS`, 안정 ID 결과 검증 |
-| chunk/complete/fail persistence | Pass | PostgreSQL 18 Testcontainers에서 101건 분할, RC2 schema·key·terminal 상태와 연결 해제 후 완료 rollback 검증 |
+| chunk/complete/fail persistence | Pass | PostgreSQL 18 Testcontainers에서 100건 기준과 256KiB 선도달 분할, RC2 schema·key·terminal 상태와 연결 해제 rollback 검증 |
 | Kafka outbox relay | Pass | Kafka 4.2.1 Testcontainers에서 4개 event의 `accountRef` key와 실제 wire 256KiB 이하 검증 |
 | 전체 build | Pass | `./gradlew clean build --no-daemon` (14 tasks) |
 
