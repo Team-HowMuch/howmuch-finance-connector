@@ -1,0 +1,23 @@
+[Unit]
+Description=HowMuch Finance Connector
+After=network-online.target docker.service postgresql.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=howmuch-finance-connector
+Group=howmuch-finance-connector
+EnvironmentFile=/etc/howmuch-finance-connector.env
+WorkingDirectory=/opt/howmuch-finance-connector
+ExecStart=/usr/bin/java -jar /opt/howmuch-finance-connector/howmuch-finance-connector.jar --spring.profiles.active=dev
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/log/howmuch-finance-connector
+SuccessExitStatus=143
+
+[Install]
+WantedBy=multi-user.target
