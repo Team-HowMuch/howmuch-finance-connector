@@ -1,0 +1,14 @@
+services:
+  postgres:
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_DB: howmuch_finance_connector_test
+      POSTGRES_USER: howmuch_connector_test
+      POSTGRES_PASSWORD: connector_test
+    ports:
+      - "25432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U howmuch_connector_test -d howmuch_finance_connector_test"]
+      interval: 2s
+      timeout: 3s
+      retries: 15
