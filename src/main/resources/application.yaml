@@ -11,6 +11,34 @@ spring:
     open-in-view: false
   flyway:
     enabled: true
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    producer:
+      acks: all
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+      properties:
+        enable.idempotence: true
+    consumer:
+      enable-auto-commit: false
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+    listener:
+      ack-mode: record
+      concurrency: 1
+
+connector:
+  internal:
+    service-token: ${CONNECTOR_SERVICE_TOKEN:}
+
+finance:
+  messaging:
+    enabled: ${FINANCE_MESSAGING_ENABLED:true}
+  kafka:
+    command-topic: ${FINANCE_COMMAND_TOPIC:finance.sync.command.v1}
+    event-topic: ${FINANCE_EVENT_TOPIC:finance.sync.event.v1}
+    connector-group-id: ${FINANCE_CONNECTOR_GROUP_ID:finance-connector-sync-v1}
 
 management:
   endpoints:
