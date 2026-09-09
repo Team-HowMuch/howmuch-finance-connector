@@ -75,12 +75,12 @@ class FinanceSyncContractTest {
 
         JsonNode published = read("transactions-chunk-collected.json");
         JsonNode transaction = published.path("data").path("items").get(0);
-        String expectedKey = sha256(published.path("accountRef").asText()
-                + transaction.path("providerTransactionId").asText());
+        String expectedKey = sha256(published.path("accountRef").stringValue()
+                + transaction.path("providerTransactionId").stringValue());
 
         assertFalse(validate(missingProviderId).isEmpty());
         assertFalse(validate(invalidKey).isEmpty());
-        assertEquals(expectedKey, transaction.path("transactionKey").asText());
+        assertEquals(expectedKey, transaction.path("transactionKey").stringValue());
     }
 
     @Test
