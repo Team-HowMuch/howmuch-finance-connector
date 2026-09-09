@@ -1,0 +1,162 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://howmuch.team/schemas/finance-sync-message-v1.schema.json",
+  "title": "HowMuch finance sync message v1",
+  "type": "object",
+  "required": [
+    "messageId",
+    "messageType",
+    "schemaVersion",
+    "occurredAt",
+    "syncJobId",
+    "accountRef",
+    "syncVersion",
+    "connectionVersion",
+    "causationId",
+    "traceId",
+    "data"
+  ],
+  "properties": {
+    "messageId": { "type": "string", "format": "uuid" },
+    "messageType": {
+      "enum": [
+        "SyncAccountTransactions",
+        "SyncAccepted",
+        "TransactionsChunkCollected",
+        "TransactionsCollectionCompleted",
+        "TransactionsSyncFailed"
+      ]
+    },
+    "schemaVersion": { "const": 1 },
+    "occurredAt": { "type": "string", "format": "date-time" },
+    "syncJobId": { "type": "string", "format": "uuid" },
+    "accountRef": { "type": "string", "format": "uuid" },
+    "syncVersion": { "type": "integer", "minimum": 1 },
+    "connectionVersion": { "type": "integer", "minimum": 1 },
+    "causationId": {
+      "oneOf": [
+        { "type": "string", "format": "uuid" },
+        { "type": "null" }
+      ]
+    },
+    "traceId": { "type": ["string", "null"], "maxLength": 100 },
+    "data": { "type": "object" }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "messageType": { "const": "SyncAccountTransactions" } } },
+      "then": { "properties": { "data": { "$ref": "#/$defs/syncCommand" } } }
+    },
+    {
+      "if": { "properties": { "messageType": { "const": "SyncAccepted" } } },
+      "then": { "properties": { "data": { "$ref": "#/$defs/syncAccepted" } } }
+    },
+    {
+      "if": { "properties": { "messageType": { "const": "TransactionsChunkCollected" } } },
+      "then": { "properties": { "data": { "$ref": "#/$defs/chunkCollected" } } }
+    },
+    {
+      "if": { "properties": { "messageType": { "const": "TransactionsCollectionCompleted" } } },
+      "then": { "properties": { "data": { "$ref": "#/$defs/collectionCompleted" } } }
+    },
+    {
+      "if": { "properties": { "messageType": { "const": "TransactionsSyncFailed" } } },
+      "then": { "properties": { "data": { "$ref": "#/$defs/syncFailed" } } }
+    }
+  ],
+  "additionalProperties": false,
+  "$defs": {
+    "syncCommand": {
+      "type": "object",
+      "required": ["connectionRef", "fromDate", "toDate", "timeZone", "reason", "deadlineAt"],
+      "properties": {
+        "connectionRef": { "type": "string", "format": "uuid" },
+        "fromDate": { "type": "string", "format": "date" },
+        "toDate": { "type": "string", "format": "date" },
+        "timeZone": { "const": "Asia/Seoul" },
+        "reason": { "const": "USER_REFRESH" },
+        "deadlineAt": { "type": "string", "format": "date-time" }
+      },
+      "additionalProperties": false
+    },
+    "syncAccepted": {
+      "type": "object",
+      "required": ["acceptedAt"],
+      "properties": {
+        "acceptedAt": { "type": "string", "format": "date-time" }
+      },
+      "additionalProperties": false
+    },
+    "transaction": {
+      "type": "object",
+      "required": [
+        "transactionKey",
+        "sourceTransactionId",
+        "identityQuality",
+        "bookedDate",
+        "bookedAt",
+        "timePrecision",
+        "direction",
+        "amount",
+        "currency",
+        "balanceAfter",
+        "description",
+        "sourceStatus"
+      ],
+      "properties": {
+        "transactionKey": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "sourceTransactionId": { "type": ["string", "null"], "maxLength": 128 },
+        "identityQuality": { "enum": ["PROVIDER_STABLE", "DERIVED_VERIFIED", "AMBIGUOUS"] },
+        "bookedDate": { "type": "string", "format": "date" },
+        "bookedAt": { "type": ["string", "null"], "format": "date-time" },
+        "timePrecision": { "enum": ["DATE", "SECOND"] },
+        "direction": { "enum": ["DEBIT", "CREDIT"] },
+        "amount": { "type": "string", "pattern": "^(0|[1-9][0-9]*)$" },
+        "currency": { "const": "KRW" },
+        "balanceAfter": { "type": ["string", "null"], "pattern": "^-?(0|[1-9][0-9]*)$" },
+        "description": { "type": ["string", "null"], "maxLength": 255 },
+        "sourceStatus": { "enum": ["POSTED", "UNKNOWN"] }
+      },
+      "additionalProperties": false
+    },
+    "chunkCollected": {
+      "type": "object",
+      "required": ["chunkIndex", "collectedAt", "items"],
+      "properties": {
+        "chunkIndex": { "type": "integer", "minimum": 0 },
+        "collectedAt": { "type": "string", "format": "date-time" },
+        "items": {
+          "type": "array",
+          "maxItems": 100,
+          "items": { "$ref": "#/$defs/transaction" }
+        }
+      },
+      "additionalProperties": false
+    },
+    "collectionCompleted": {
+      "type": "object",
+      "required": ["fromDate", "toDate", "totalChunks", "totalItems", "collectionCompletedAt"],
+      "properties": {
+        "fromDate": { "type": "string", "format": "date" },
+        "toDate": { "type": "string", "format": "date" },
+        "totalChunks": { "type": "integer", "minimum": 0 },
+        "totalItems": { "type": "integer", "minimum": 0 },
+        "collectionCompletedAt": { "type": "string", "format": "date-time" }
+      },
+      "additionalProperties": false
+    },
+    "syncFailed": {
+      "type": "object",
+      "required": ["errorCode", "category", "automaticRetry", "suggestedAction", "safeMessage", "failedAt"],
+      "properties": {
+        "errorCode": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "category": { "enum": ["USER_ACTION_REQUIRED", "TEMPORARY", "INVALID_REQUEST", "DATA_INVALID", "CONNECTION_REVOKED"] },
+        "automaticRetry": { "const": false },
+        "suggestedAction": { "enum": ["RECONNECT", "RETRY", "CONTACT_SUPPORT", "NONE"] },
+        "safeMessage": { "type": "string", "minLength": 1, "maxLength": 255 },
+        "failedAt": { "type": "string", "format": "date-time" }
+      },
+      "additionalProperties": false
+    }
+  }
+}

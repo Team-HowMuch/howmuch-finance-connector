@@ -1,0 +1,32 @@
+{
+  "messageId": "66666666-6666-4666-8666-666666666666",
+  "messageType": "TransactionsChunkCollected",
+  "schemaVersion": 1,
+  "occurredAt": "2026-09-09T08:00:12Z",
+  "syncJobId": "22222222-2222-4222-8222-222222222222",
+  "accountRef": "33333333-3333-4333-8333-333333333333",
+  "syncVersion": 1,
+  "connectionVersion": 1,
+  "causationId": "11111111-1111-4111-8111-111111111111",
+  "traceId": "trace-demo-01",
+  "data": {
+    "chunkIndex": 0,
+    "collectedAt": "2026-09-09T08:00:12Z",
+    "items": [
+      {
+        "transactionKey": "provider:txn-0001",
+        "sourceTransactionId": "txn-0001",
+        "identityQuality": "PROVIDER_STABLE",
+        "bookedDate": "2026-09-08",
+        "bookedAt": "2026-09-08T12:30:00+09:00",
+        "timePrecision": "SECOND",
+        "direction": "DEBIT",
+        "amount": "12000",
+        "currency": "KRW",
+        "balanceAfter": "88000",
+        "description": "테스트 가맹점",
+        "sourceStatus": "POSTED"
+      }
+    ]
+  }
+}
