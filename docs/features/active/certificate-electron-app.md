@@ -29,3 +29,7 @@ Electron main에서 PC/USB 인증서 탐색과 HTTPS 업로드를 수행하고 s
 - `SPRING_PROFILES_ACTIVE=test ./gradlew clean build --no-daemon`: Java connector 및 contracts 14 tasks 성공. 기존 실행 DB와 별개의 임시 PostgreSQL DB에서 검증했다.
 - JavaScript 9개 소스/빌드 파일 문법 검사 성공.
 - 실제 Windows 실행/설치 파일 acceptance는 macOS에서 수행하지 않았으며 PR Windows CI와 #492 후속 확인으로 남긴다. 이번 게시에는 기존 dist 산출물을 포함하지 않는다.
+
+## Windows CI 수정
+
+첫 Windows CI에서 `defaultRoots("darwin", ...)`의 경로가 호스트의 Windows separator를 사용해 실패했다. Windows 분기는 기존 `path.win32`를 유지하고 macOS/Linux 분기는 `path.posix`를 사용하도록 수정했다. 이는 지정 platform에 따른 탐색 경로 계약을 운영체제와 무관하게 유지한다. 기존 경로 단위 테스트를 다시 실행하며 별도 `fix(certificate)` 커밋으로 게시한다.

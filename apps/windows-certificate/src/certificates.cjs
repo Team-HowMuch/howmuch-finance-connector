@@ -25,11 +25,11 @@ function defaultRoots(
   }
   return platform === "darwin"
     ? [
-        path.join(home, "Library", "Preferences", "NPKI"),
-        path.join(home, "Library", "NPKI"),
-        path.join(home, "NPKI"),
+        path.posix.join(home, "Library", "Preferences", "NPKI"),
+        path.posix.join(home, "Library", "NPKI"),
+        path.posix.join(home, "NPKI"),
       ]
-    : [path.join(home, "NPKI")];
+    : [path.posix.join(home, "NPKI")];
 }
 
 function sameFile(a, b) {
