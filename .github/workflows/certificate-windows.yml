@@ -1,0 +1,85 @@
+name: Certificate Windows app
+
+on:
+  pull_request:
+    paths:
+      - apps/windows-certificate/**
+      - .github/workflows/certificate-windows.yml
+  workflow_dispatch:
+    inputs:
+      api_origin:
+        description: Reviewed HTTPS API origin for this installer
+        required: true
+        default: https://dev.howmuch.wars.p-e.kr
+        type: string
+      signed:
+        description: Require Windows code signing
+        default: true
+        type: boolean
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: apps/windows-certificate
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: apps/windows-certificate/package-lock.json
+      - run: npm ci
+      - run: npm test
+      - run: npm run test:smoke
+      - run: npm audit --omit=dev --audit-level=high
+      - name: Configure packaging fixture
+        run: node scripts/configure.cjs https://certificate-api.example.test
+      - name: Build actual packaged app
+        run: npm exec -- electron-builder --win dir --x64
+      - name: Verify packaged renderer startup
+        run: node test/packaged-smoke.cjs "dist/win-unpacked/얼마 인증서 가져오기.exe"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: certificate-packaged-startup
+          path: apps/windows-certificate/dist/packaged-startup-smoke.png
+          if-no-files-found: ignore
+          retention-days: 7
+  installer:
+    if: github.event_name == 'workflow_dispatch'
+    needs: test
+    runs-on: windows-latest
+    environment: certificate-windows-release
+    defaults:
+      run:
+        working-directory: apps/windows-certificate
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: apps/windows-certificate/package-lock.json
+      - run: npm ci
+      - name: Configure reviewed API origin
+        env:
+          CERTIFICATE_BUILD_API_ORIGIN: ${{ inputs.api_origin }}
+        run: node scripts/configure.cjs "$env:CERTIFICATE_BUILD_API_ORIGIN"
+      - name: Build installer
+        env:
+          HOWMUCH_REQUIRE_SIGNING: ${{ inputs.signed }}
+          CSC_LINK: ${{ secrets.WINDOWS_CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.WINDOWS_CSC_KEY_PASSWORD }}
+        run: npm run dist:win
+      - name: Verify release app startup
+        run: node test/packaged-smoke.cjs "dist/win-unpacked/얼마 인증서 가져오기.exe"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: howmuch-certificate-windows
+          path: apps/windows-certificate/dist/*Setup.exe*
+          retention-days: 7

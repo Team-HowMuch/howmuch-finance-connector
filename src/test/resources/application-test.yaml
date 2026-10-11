@@ -1,0 +1,12 @@
+spring:
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://127.0.0.1:25432/howmuch_finance_connector_test}
+    username: ${DB_USERNAME:howmuch_connector_test}
+    password: ${DB_PASSWORD:connector_test}
+
+finance:
+  internal:
+    service-token: test-service-token
+    data-key: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+  messaging:
+    enabled: false

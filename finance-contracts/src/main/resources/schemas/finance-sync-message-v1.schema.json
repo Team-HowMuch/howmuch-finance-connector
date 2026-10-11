@@ -1,0 +1,163 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://howmuch.team/schemas/finance-sync-message-v1.schema.json",
+  "title": "HowMuch finance sync message v1",
+  "type": "object",
+  "required": [
+    "messageId",
+    "messageType",
+    "schemaVersion",
+    "occurredAt",
+    "syncJobId",
+    "accountRef",
+    "syncVersion",
+    "connectionVersion",
+    "causationId",
+    "traceId",
+    "data"
+  ],
+  "properties": {
+    "messageId": { "type": "string", "format": "uuid" },
+    "messageType": {
+      "enum": [
+        "SyncAccountTransactions",
+        "SyncAccepted",
+        "TransactionsChunkCollected",
+        "TransactionsCollectionCompleted",
+        "TransactionsSyncFailed"
+      ]
+    },
+    "schemaVersion": { "const": 1 },
+    "occurredAt": { "type": "string", "format": "date-time" },
+    "syncJobId": { "type": "string", "format": "uuid" },
+    "accountRef": { "type": "string", "format": "uuid" },
+    "syncVersion": { "type": "integer", "minimum": 1 },
+    "connectionVersion": { "type": "integer", "minimum": 1 },
+    "causationId": {
+      "oneOf": [
+        { "type": "string", "format": "uuid" },
+        { "type": "null" }
+      ]
+    },
+    "traceId": { "type": ["string", "null"], "minLength": 1, "maxLength": 100 },
+    "data": { "type": "object" }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "messageType": { "const": "SyncAccountTransactions" } } },
+      "then": { "properties": { "data": { "$ref": "#/$defs/syncCommand" } } }
+    },
+    {
+      "if": { "properties": { "messageType": { "const": "SyncAccepted" } } },
+      "then": { "properties": { "data": { "$ref": "#/$defs/syncAccepted" } } }
+    },
+    {
+      "if": { "properties": { "messageType": { "const": "TransactionsChunkCollected" } } },
+      "then": { "properties": { "data": { "$ref": "#/$defs/chunkCollected" } } }
+    },
+    {
+      "if": { "properties": { "messageType": { "const": "TransactionsCollectionCompleted" } } },
+      "then": { "properties": { "data": { "$ref": "#/$defs/collectionCompleted" } } }
+    },
+    {
+      "if": { "properties": { "messageType": { "const": "TransactionsSyncFailed" } } },
+      "then": { "properties": { "data": { "$ref": "#/$defs/syncFailed" } } }
+    }
+  ],
+  "additionalProperties": false,
+  "$defs": {
+    "syncCommand": {
+      "type": "object",
+      "required": ["connectionRef", "fromDate", "toDate", "timeZone", "reason", "deadlineAt"],
+      "properties": {
+        "connectionRef": { "type": "string", "format": "uuid" },
+        "fromDate": { "type": "string", "format": "date" },
+        "toDate": { "type": "string", "format": "date" },
+        "timeZone": { "const": "Asia/Seoul" },
+        "reason": { "enum": ["USER_REQUEST", "STALE_WHILE_REVALIDATE"] },
+        "deadlineAt": { "type": "string", "format": "date-time" }
+      },
+      "additionalProperties": false
+    },
+    "syncAccepted": {
+      "type": "object",
+      "required": ["acceptedAt"],
+      "properties": {
+        "acceptedAt": { "type": "string", "format": "date-time" }
+      },
+      "additionalProperties": false
+    },
+    "transaction": {
+      "type": "object",
+      "required": [
+        "transactionKey",
+        "providerTransactionId",
+        "bookedAt",
+        "direction",
+        "amount",
+        "currency",
+        "balanceAfter",
+        "description"
+      ],
+      "properties": {
+        "transactionKey": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "providerTransactionId": { "type": "string", "minLength": 1, "maxLength": 256 },
+        "bookedAt": { "type": "string", "format": "date-time" },
+        "direction": { "enum": ["INCOME", "EXPENSE"] },
+        "amount": { "type": "string", "pattern": "^[1-9][0-9]*$" },
+        "currency": { "const": "KRW" },
+        "balanceAfter": { "type": ["string", "null"], "pattern": "^-?(0|[1-9][0-9]*)$" },
+        "description": { "type": ["string", "null"], "maxLength": 500 }
+      },
+      "additionalProperties": false
+    },
+    "chunkCollected": {
+      "type": "object",
+      "required": ["chunkIndex", "collectedAt", "items"],
+      "properties": {
+        "chunkIndex": { "type": "integer", "minimum": 0 },
+        "collectedAt": { "type": "string", "format": "date-time" },
+        "items": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 100,
+          "items": { "$ref": "#/$defs/transaction" }
+        }
+      },
+      "additionalProperties": false
+    },
+    "collectionCompleted": {
+      "type": "object",
+      "required": ["fromDate", "toDate", "totalChunks", "totalItems", "collectionCompletedAt"],
+      "properties": {
+        "fromDate": { "type": "string", "format": "date" },
+        "toDate": { "type": "string", "format": "date" },
+        "totalChunks": { "type": "integer", "minimum": 0 },
+        "totalItems": { "type": "integer", "minimum": 0 },
+        "collectionCompletedAt": { "type": "string", "format": "date-time" }
+      },
+      "additionalProperties": false
+    },
+    "syncFailed": {
+      "type": "object",
+      "required": ["failureCode", "retryable", "safeMessage", "failedAt"],
+      "properties": {
+        "failureCode": {
+          "enum": [
+            "AMBIGUOUS",
+            "REAUTH_REQUIRED",
+            "UPSTREAM_UNAVAILABLE",
+            "INVALID_REQUEST",
+            "CONNECTION_REVOKED",
+            "DEADLINE_EXCEEDED",
+            "INTERNAL_ERROR"
+          ]
+        },
+        "retryable": { "type": "boolean" },
+        "safeMessage": { "type": "string", "minLength": 1, "maxLength": 255 },
+        "failedAt": { "type": "string", "format": "date-time" }
+      },
+      "additionalProperties": false
+    }
+  }
+}

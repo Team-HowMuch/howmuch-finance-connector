@@ -1,0 +1,3 @@
+rootProject.name = 'howmuch-finance-connector'
+
+include 'finance-contracts'
