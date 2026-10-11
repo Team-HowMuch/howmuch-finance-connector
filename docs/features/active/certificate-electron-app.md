@@ -33,3 +33,5 @@ Electron main에서 PC/USB 인증서 탐색과 HTTPS 업로드를 수행하고 s
 ## Windows CI 수정
 
 첫 Windows CI에서 `defaultRoots("darwin", ...)`의 경로가 호스트의 Windows separator를 사용해 실패했다. Windows 분기는 기존 `path.win32`를 유지하고 macOS/Linux 분기는 `path.posix`를 사용하도록 수정했다. 이는 지정 platform에 따른 탐색 경로 계약을 운영체제와 무관하게 유지한다. 기존 경로 단위 테스트를 다시 실행하며 별도 `fix(certificate)` 커밋으로 게시한다.
+
+수정 후 Windows 단위 테스트·실제 Electron smoke·production audit·실제 패키징은 통과했다. 패키징 startup 검증에는 HTML 제목 변경 전 기대값이 남아 있어 실패했다. 사용자 요청의 HTML 제목 `인증서 가져오기`에 맞춰 테스트 기대값을 수정한다. 설치본 productName `얼마 인증서 가져오기`는 유지한다. 별도 `test(certificate)` 커밋으로 게시하고 Windows 전체 경로를 다시 확인한다.

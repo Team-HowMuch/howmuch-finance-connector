@@ -106,7 +106,7 @@ async function run() {
     await delay(100);
   }
   assert.equal(state?.url, "howmuch-cert://app/index.html");
-  assert.equal(state?.title, "얼마 인증서 가져오기");
+  assert.equal(state?.title, "인증서 가져오기");
   assert.equal(state?.brand, "인증서 가져오기");
   assert.equal(state?.heading, "인증서 가져오기");
   assert.equal(state?.form, true);
