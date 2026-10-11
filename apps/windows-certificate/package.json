@@ -1,0 +1,60 @@
+{
+  "name": "howmuch-certificate",
+  "version": "0.1.5",
+  "private": true,
+  "description": "얼마 인증서 가져오기",
+  "main": "src/main.cjs",
+  "scripts": {
+    "start": "electron .",
+    "test": "node --test test/*.test.cjs",
+    "configure": "node scripts/configure.cjs",
+    "dist:win": "electron-builder --win nsis --x64",
+    "test:smoke": "electron test/smoke.cjs"
+  },
+  "dependencies": {
+    "qrcode": "1.5.4"
+  },
+  "devDependencies": {
+    "electron": "44.7.0",
+    "electron-builder": "26.15.3"
+  },
+  "build": {
+    "appId": "team.howmuch.certificate",
+    "productName": "얼마 인증서 가져오기",
+    "asar": true,
+    "icon": "src/assets/icon.png",
+    "files": [
+      "src/**/*",
+      "release-config.json",
+      "package.json"
+    ],
+    "beforePack": "./scripts/before-pack.cjs",
+    "directories": {
+      "output": "dist"
+    },
+    "win": {
+      "target": "nsis",
+      "artifactName": "얼마-인증서-가져오기-${version}-${arch}-Setup.${ext}"
+    },
+    "mac": {
+      "extendInfo": {
+        "NSRemovableVolumesUsageDescription": "USB에 저장된 공동인증서를 찾기 위해 이동식 디스크에 접근합니다."
+      }
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "deleteAppDataOnUninstall": true
+    },
+    "electronFuses": {
+      "runAsNode": false,
+      "enableNodeOptionsEnvironmentVariable": false,
+      "enableNodeCliInspectArguments": false,
+      "enableEmbeddedAsarIntegrityValidation": true,
+      "onlyLoadAppFromAsar": true
+    }
+  },
+  "author": "Team-HowMuch"
+}

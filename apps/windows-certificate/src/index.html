@@ -1,0 +1,196 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>인증서 가져오기</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <header class="app-header">
+      <img
+        class="brand-icon"
+        draggable="false"
+        src="assets/logo.png"
+        width="34"
+        height="34"
+        alt=""
+      /><span class="brand">인증서 가져오기</span>
+      <button id="appClose" class="app-close" type="button" aria-label="앱 종료" title="앱 종료">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18" /></svg>
+      </button>
+    </header>
+    <div class="app-layout">
+      <nav class="steps" aria-label="인증서 연결 단계">
+        <ol>
+          <li id="step1" aria-current="step">
+            <span class="step-number">1</span><span>인증서 가져오기</span>
+          </li>
+          <li id="step2">
+            <span class="step-number">2</span><span>금융사 인증</span>
+          </li>
+          <li id="step3">
+            <span class="step-number">3</span><span>모바일 연결</span>
+          </li>
+        </ol>
+      </nav>
+      <main>
+        <form id="registration" autocomplete="off">
+          <h1>인증서 가져오기</h1>
+          <fieldset class="certificates">
+            <legend>공동인증서</legend>
+            <div class="storage-options" aria-label="인증서 저장 위치">
+              <button
+                id="computer"
+                class="storage"
+                type="button"
+                aria-pressed="true"
+              >
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <rect x="3" y="4" width="18" height="13" rx="2" />
+                  <path d="M8 21h8m-4-4v4" />
+                </svg>
+                내 컴퓨터
+              </button>
+              <button
+                id="usb"
+                class="storage"
+                type="button"
+                aria-pressed="false"
+              >
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path
+                    d="M12 3v13m-4-5 4 4 4-4M12 3l-2 3m2-3 2 3M8 11H5V8m11 3h3V8"
+                  />
+                  <circle cx="12" cy="19" r="2" />
+                </svg>
+                USB · 이동식 디스크
+              </button>
+              <button
+                id="refreshCertificates"
+                class="refresh-certificates"
+                type="button"
+                aria-label="인증서 새로고침"
+                title="새로고침"
+              >
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M20 8a8 8 0 1 0 0 8M20 3v5h-5" />
+                </svg>
+              </button>
+            </div>
+            <div
+              class="certificate-panel"
+              id="certificatePanel"
+              aria-busy="true"
+            >
+              <div class="certificate-head" aria-hidden="true">
+                <span>소유자</span><span>발급기관</span><span>만료일</span>
+              </div>
+              <div
+                id="certificateList"
+                class="certificate-list"
+                role="group"
+                aria-label="공동인증서 목록"
+              ></div>
+              <div
+                id="certificateEmpty"
+                class="certificate-empty"
+                role="status"
+              >
+                <svg viewBox="0 0 48 48" aria-hidden="true">
+                  <rect x="11" y="5" width="26" height="35" rx="4" />
+                  <path d="M18 14h12m-12 6h8" />
+                  <circle cx="28" cy="33" r="6" />
+                  <path d="m24 38-1 6 5-3 5 3-1-6" />
+                </svg>
+                <p id="certificateEmptyText">인증서 찾는 중…</p>
+              </div>
+            </div>
+            <button id="folder" class="browse-certificates" type="button">
+              다른 위치에서 찾기
+            </button>
+            <p id="scanNotice" class="scan-notice" role="status" hidden></p>
+          </fieldset>
+          <label class="field" for="password"
+            ><span>인증서 비밀번호</span
+            ><input
+              id="password"
+              type="password"
+              required
+              maxlength="256"
+              placeholder="비밀번호 입력"
+              autocomplete="off"
+          /></label>
+          <label class="field" for="organization"
+            ><span>금융사</span
+            ><select id="organization" required disabled>
+              <option value="">금융사 선택</option>
+            </select></label
+          >
+          <div id="accountFields" class="extra-fields" hidden>
+            <label class="field" for="accountNumber"
+              ><span>계좌번호</span
+              ><input
+                id="accountNumber"
+                inputmode="numeric"
+                maxlength="30"
+                placeholder="숫자만 입력"
+                autocomplete="off"
+            /></label>
+            <label class="field" for="accountPassword"
+              ><span>계좌 비밀번호</span
+              ><input
+                id="accountPassword"
+                type="password"
+                inputmode="numeric"
+                maxlength="8"
+                placeholder="계좌 비밀번호 입력"
+                autocomplete="off"
+            /></label>
+          </div>
+          <label id="birthField" class="field" for="birthDate" hidden
+            ><span>생년월일</span
+            ><input
+              id="birthDate"
+              inputmode="numeric"
+              maxlength="8"
+              placeholder="생년월일 입력"
+              autocomplete="off"
+          /></label>
+          <button id="submit" class="primary" type="submit" disabled>
+            인증서 가져오기
+          </button>
+        </form>
+        <section id="progress" hidden aria-labelledby="progressTitle">
+          <div class="progress-mark" aria-hidden="true"><span></span></div>
+          <h2 id="progressTitle" role="status" aria-live="polite">인증서 확인 중</h2>
+          <p id="progressText" class="status-detail" role="alert" hidden></p>
+          <div class="qr-card" id="qrCard" hidden>
+            <img
+              id="qrImage"
+              width="224"
+              height="224"
+              alt="모바일 연결 QR 코드"
+              hidden
+            />
+            <p id="qrExpiry"></p>
+          </div>
+          <button id="refreshQr" class="secondary" type="button" hidden>
+            QR 다시 받기
+          </button>
+          <div id="claimBox" hidden>
+            <p>모바일 화면의 확인 코드</p>
+            <strong id="confirmationCode"></strong>
+            <p class="status-detail">모바일 화면과 코드가 같은지 확인해 주세요.</p>
+            <button id="reject" class="secondary" type="button">
+              요청 거절
+            </button>
+          </div>
+          <button id="cancel" class="text-button" type="button">취소</button>
+        </section>
+        <p id="message" role="status" aria-live="polite">금융사 불러오는 중…</p>
+      </main>
+    </div>
+    <script src="renderer.js"></script>
+  </body>
+</html>
