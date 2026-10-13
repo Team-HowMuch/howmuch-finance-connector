@@ -200,6 +200,7 @@ app.whenReady().then(async () => {
     client?.cancel().catch(() => {});
     window = undefined;
   });
+  ipcMain.handle("certificate:app-version", trusted(async () => app.getVersion()));
   ipcMain.handle(
     "certificate:init",
     trusted(async () => {

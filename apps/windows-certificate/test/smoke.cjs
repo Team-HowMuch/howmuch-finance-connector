@@ -157,6 +157,10 @@ async function run() {
   );
   assert.equal(uploads, 0);
   assert.equal(w.isMinimizable(), false);
+  await wait(w,
+    `document.getElementById('clientVersion')?.textContent === ${JSON.stringify(`Client ver. ${app.getVersion()}`)} && !document.getElementById('clientVersion').hidden`,
+    "Installed client version must be visible independently of the API",
+  );
   assert.equal(w.isMaximizable(), false);
   assert.equal(w.isFullScreenable(), false);
   await capture(w, "electron-initial-pairing-smoke.png");
