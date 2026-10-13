@@ -1,6 +1,6 @@
 # 얼마 인증서 가져오기
 
-PC·USB의 공동인증서를 선택하고, 모바일 QR 승인으로 HowMuch 금융 연결을 만드는 Electron 앱입니다. 설치 이름은 **얼마 인증서 가져오기**, 창 제목은 **인증서 가져오기**입니다.
+앱 실행 직후 QR로 휴대폰을 연결하고, PC·USB의 공동인증서로 금융사를 인증한 뒤 모바일 최종 승인으로 HowMuch 금융 연결을 저장하는 Electron 앱입니다. 설치 이름은 **얼마 인증서 가져오기**, 창 제목은 **인증서 가져오기**입니다.
 
 앱 소스와 Windows/macOS 빌드는 이 저장소에서 관리합니다. 인증서 접수·CODEF 호출·connectedId 저장·Kafka Inbox/Outbox는 현재 [Backend API](https://github.com/Team-HowMuch/howmuch-backend-v2)에 있습니다. finance-connector Java 서버를 실행하는 것만으로 인증서 API가 열리지는 않습니다.
 
@@ -32,7 +32,7 @@ $env:HOWMUCH_CERTIFICATE_API_ORIGIN = "http://127.0.0.1:18081"
 npm start
 ```
 
-Backend에는 PostgreSQL·Redis·Kafka, V46/V47 마이그레이션과 인증서 기능 설정이 필요합니다. 실제 인증서 테스트에는 mock 서버가 아닌 실제 CODEF 구성이 필요합니다. 설치본은 위 환경변수를 무시하고 빌드 시 지정한 HTTPS 주소만 사용합니다.
+Backend에는 PostgreSQL·Redis·Kafka, V46/V47/V50 마이그레이션 및 초기 pairing API과 인증서 기능 설정이 필요합니다. 실제 인증서 테스트에는 mock 서버가 아닌 실제 CODEF 구성이 필요합니다. 설치본은 위 환경변수를 무시하고 빌드 시 지정한 HTTPS 주소만 사용합니다.
 
 ## Windows 설치 파일 빌드
 
@@ -104,28 +104,42 @@ HOWMUCH_CERTIFICATE_API_ORIGIN=https://dev.howmuch.wars.p-e.kr npm run dist:mac
 
 `dist/얼마-인증서-가져오기-<version>-arm64.dmg`와 `...-x64.dmg`가 생성됩니다. Apple Silicon(M1 이상)은 arm64, Intel Mac은 x64를 선택합니다. `mac.identity: "-"`로 앱과 내부 실행 파일에 ad-hoc 서명을 적용합니다. hardened runtime, sandbox와 ASAR 보안 fuse를 유지합니다. Apple 공증은 수행하지 않습니다.
 
+DMG 설치 화면은 얼마의 파란색, 짧은 설치 안내와 앱 → Applications 화살표를 사용합니다. 아이콘은 실제 Finder 항목이며 앱을 오른쪽 폴더로 드래그합니다. `installer/dmg-background.png`(720×460)와 `installer/dmg-background@2x.png`(1440×920)를 빌드에 사용합니다. 배경만 바꿀 때는 macOS에서 다음을 실행하고 두 배경 PNG와 `src/assets/icon-mac.png`를 함께 반영합니다. macOS 설치 아이콘과 Dock은 이 투명 여백·둥근 모서리의 전용 아이콘을 공유하며, Windows는 기존 아이콘을 유지합니다. CI는 커밋된 이미지를 사용하므로 Swift나 폰트 설치가 필요하지 않습니다.
+
+```sh
+swift scripts/render-dmg.swift --preview
+```
+
+`dist/dmg-preview.png`는 배경에 아이콘을 합성한 디자인 미리보기이며 Finder 스크린샷은 아닙니다. 실제 배치는 `package.json`의 `build.dmg.contents`에서 관리합니다. 레이아웃 크기와 아이콘 좌표를 바꾸면 생성 스크립트도 맞춥니다. 디스크 이름은 `HowMuch Certificate <version>`을 사용합니다. dmgbuild/mac_alias의 한글 NFD/NFC 경로 불일치로 호스트 APFS file ID가 배경 alias에 들어가는 것을 방지하기 위한 선택이며, 앱 표시 이름은 한글을 유지합니다. 첫 배포 전에는 native Intel DMG 생성도 확인합니다.
+
 DMG를 열고 앱을 Applications로 드래그한 뒤 실행합니다. 개발자 확인 경고가 나오면, 직접 받은 신뢰 가능한 파일인지 확인한 뒤 **시스템 설정 → 개인정보 보호 및 보안 → 확인 없이 열기**를 사용합니다. ad-hoc 서명은 Developer ID나 Apple 공증을 대신하지 않으며 Gatekeeper의 자동 허용을 보장하지 않습니다. [Apple 실행 안내](https://support.apple.com/en-us/102445)를 참고합니다. 코드/리소스가 손상되었다는 오류는 단순 승인 대상으로 처리하지 말고 설치 파일과 checksum을 다시 확인합니다.
 
 PR에서는 Mac 두 CPU의 native runner에서 Electron 및 패키징 실행을 검증합니다. Release에서는 두 DMG의 ad-hoc 서명·API origin·초기 실행을 검증하고, Windows까지 모두 성공한 뒤 한 게시 job에서 설치 파일을 첨부합니다. Apple Silicon 로컬 검증은 Intel의 native 실행 및 인터넷 다운로드 후 Gatekeeper 동작을 대신하지 않습니다.
 
 ## 사용 방법
 
-1. 앱을 실행하고 USB를 연결합니다. USB가 있으면 자동으로 선택하며, PC 인증서 또는 다른 폴더도 선택할 수 있습니다.
-2. 인증서를 선택하고 금융사와 인증서 비밀번호를 입력합니다. 금융사에서 요구하면 계좌번호·계좌 비밀번호·생년월일도 입력합니다. 우리은행은 계좌번호와 계좌 비밀번호가 필요합니다.
-3. 가져오기를 진행하면 QR이 표시됩니다. 로그인한 모바일 사용자가 QR을 스캔하면 PC에 6자리 확인 코드와 수신 체크가 표시됩니다.
-4. 모바일에서 금융사를 확인하고 Yes/No를 선택합니다. Yes이면 서버가 CODEF 등록을 진행하고 성공 후 사용자 연결을 저장합니다. No이면 CODEF 등록 없이 취소합니다.
-5. 앱에 **연결이 완료됐어요** 체크가 뜨면 완료입니다. `다시 가져오기`로 다음 인증서를 연결할 수 있습니다. 이 버튼은 기존 금융 연결을 삭제하지 않습니다.
+앱 상단 오른쪽의 `Client ver.`에서 설치한 앱 버전을 확인할 수 있습니다. 패키지 버전을 자동으로 읽으며 `0.1.9-rc.1` 같은 프리릴리스 표기도 그대로 표시합니다. 서버 연결 상태와 무관하게 확인할 수 있습니다.
 
-모바일 Yes/No 화면은 모바일 앱 저장소의 별도 구현 대상입니다. 화면 연동 전에는 로그인 JWT로 아래 API를 호출해 같은 흐름을 검증할 수 있습니다. QR과 토큰을 공개 채팅·로그에 남기지 않습니다.
+1. 앱을 실행하고 첫 화면의 QR을 로그인한 얼마 모바일 앱에서 스캔합니다. 첫 QR은 PC·모바일 연결이며 금융사 연결 승인은 아닙니다.
+2. 모바일에는 연결 완료 후 PC 인증 대기를 표시합니다. PC에 인증서 선택 화면이 열리면 PC·USB 인증서를 선택하고 금융사·인증서 비밀번호를 입력합니다. 필요한 계좌번호·계좌 비밀번호·생년월일도 입력합니다.
+3. PC에서 가져오기를 진행합니다. 서버는 연결된 사용자의 기존 connectedId가 있으면 재사용해 CODEF를 호출합니다. 오류가 나면 PC/모바일에 공통 오류를 표시하고 최종 승인 화면은 열지 않습니다.
+4. 인증 성공 후 모바일에 금융사와 최종 Yes/No를 표시합니다. 두 번째 QR은 없습니다. 최종 요청의 6자리 확인 코드는 PC에서 확인할 수 있습니다.
+5. Yes이면 이미 검증된 임시 결과를 사용자 DB에 저장하고 양쪽에 완료를 표시합니다. No이면 임시 결과를 폐기하고 사용자 DB에 새 연결을 저장하지 않습니다.
 
-- `POST /api/v2/certificate-claims`: QR의 sessionId·qrToken과 idempotencyKey로 예약.
-- `GET /api/v2/certificate-claims/{sessionId}/{claimId}`: 금융사와 처리 상태 확인.
-- `POST /api/v2/certificate-claims/{sessionId}/{claimId}/decision`: `{ "approved": true }` 또는 false.
-- Yes의 `SUBMITTED`는 접수 상태입니다. GET을 반복해 `BOUND`와 로컬 connectionId를 확인합니다.
-- `GET /api/v2/accounts/connections`: 내 금융사 연결 목록.
-- `GET /api/v2/accounts/connections/{connectionId}/accounts?organization=0020`: 계좌 후보 조회. 조회만으로 계좌가 선택·등록되지는 않습니다.
+CODEF의 기존 connectedId add/update는 PC 인증 단계에서 수행됩니다. No가 외부 금융사 인증자료의 이전 상태까지 복원한다는 뜻은 아닙니다. 기존 또는 재사용된 ID를 삭제하지 않도록 pairing 취소는 우리 서버의 임시 암호문만 폐기합니다. 미귀속 CODEF 등록 자료의 정리는 별도 운영 대상입니다.
 
-QR이 만료되면 앱에서 새 QR을 만듭니다. 인증서/계좌 비밀번호 오류와 잠김 등은 구분해 표시합니다. `UNKNOWN`은 외부 처리 결과를 확인할 수 없는 상태이므로 자동으로 재등록하지 않습니다.
+### 모바일 연동 API · QR v2
+
+QR 형식은 `{ "v": 2, "type": "HOWMUCH_CERTIFICATE_PAIRING", "pairingId": "UUID", "qrToken": "일회용 토큰" }`입니다. QR/토큰을 로그나 공개 채팅에 남기지 않습니다. 기존 v1 `HOWMUCH_CERTIFICATE_CLAIM` QR는 구버전 흐름이며 새 모바일 연동에서 구분해야 합니다.
+
+- `POST /api/v2/certificate-pairings/{pairingId}/claim`, JWT + `{ "qrToken": "..." }`: 최초 사용자 연결. 동일 사용자 재시도는 멱등이며 다른 사용자는 거절합니다.
+- `GET /api/v2/certificate-pairings/{pairingId}`, JWT: `PAIRED`는 PC 입력 대기, `SUBMITTED`/`REGISTERING`은 금융사 인증 대기. 모바일에서 “연결됐어요 / PC에서 인증을 진행해 주세요”와 대기 화면을 표시합니다.
+- `READY_FOR_CLAIM`이면 `POST /api/v2/certificate-pairings/{pairingId}/approval`을 호출합니다. 응답의 `claimId`와 상태 응답의 `sessionId`를 사용합니다.
+- `POST /api/v2/certificate-claims/{sessionId}/{claimId}/decision`, `{ "approved": true | false }`: 금융사 확인 후 최종 Yes/No. Yes는 추가 CODEF 호출 없이 DB 저장하며 성공 상태는 `BOUND`입니다.
+- `FAILED`는 `failureCode`/`failureMessage`를 표시합니다. `UNKNOWN`은 결과 불명으로 자동 재등록하지 않고 운영 확인이 필요합니다. `EXPIRED`/`CANCELLED`는 현재 흐름을 종료합니다.
+- `GET /api/v2/accounts/connections`와 `GET /api/v2/accounts/connections/{connectionId}/accounts?organization=...`로 완료된 연결·보유계좌를 조회합니다.
+
+모바일 화면 구현은 이 Electron 저장소에 포함되지 않습니다. 모바일 저장소에서 QR v2 분기·pairing 상태 폴링·최종 approval/decision을 연결해야 합니다. 서버 변경은 [Backend #517](https://github.com/Team-HowMuch/howmuch-backend-v2/issues/517), SQL은 [#518](https://github.com/Team-HowMuch/howmuch-backend-v2/pull/518)입니다. **신규 서버 API/V50 배포 전에는 이번 설치본의 초기 QR을 발급할 수 없습니다.**
 
 ## 인증서 탐색과 지원 범위
 

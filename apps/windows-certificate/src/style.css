@@ -85,6 +85,16 @@ select:focus-visible {
   gap: 10px;
   border-bottom: 1px solid var(--gray-10);
 }
+.client-version {
+  margin-left: auto;
+  color: var(--gray-60);
+  font-size: 12px;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.client-version:not([hidden]) + .app-close {
+  margin-left: 0;
+}
 .app-close {
   -webkit-app-region: no-drag;
   margin-left: auto;
@@ -630,4 +640,29 @@ legend {
     grid-template-columns: 1fr;
     gap: 0;
   }
+}
+
+#pairing {
+  text-align: center;
+  padding: 56px 20px;
+}
+#pairing h1 {
+  font-size: 25px;
+  margin: 0 0 12px;
+}
+#pairing p {
+  color: var(--muted, #687588);
+}
+#pairingQr {
+  display: block;
+  margin: 28px auto 16px;
+  border-radius: 16px;
+}
+#pairingQr[hidden] {
+  display: none;
+}
+.paired-notice {
+  color: #07854b;
+  margin: 0 0 20px;
+  font-weight: 600;
 }

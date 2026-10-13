@@ -1,6 +1,6 @@
 {
   "name": "howmuch-certificate",
-  "version": "0.1.6-rc.3",
+  "version": "0.1.10",
   "private": true,
   "description": "얼마 인증서 가져오기",
   "main": "src/main.cjs",
@@ -45,7 +45,8 @@
       "notarize": false,
       "hardenedRuntime": true,
       "artifactName": "얼마-인증서-가져오기-${version}-${arch}.${ext}",
-      "target": "dmg"
+      "target": "dmg",
+      "icon": "src/assets/icon-mac.png"
     },
     "nsis": {
       "oneClick": false,
@@ -62,7 +63,27 @@
       "onlyLoadAppFromAsar": true
     },
     "dmg": {
-      "backgroundColor": "#ffffff"
+      "background": "installer/dmg-background.png",
+      "title": "HowMuch Certificate ${version}",
+      "iconSize": 128,
+      "iconTextSize": 13,
+      "window": {
+        "width": 720,
+        "height": 460
+      },
+      "contents": [
+        {
+          "x": 190,
+          "y": 260,
+          "type": "file"
+        },
+        {
+          "x": 530,
+          "y": 260,
+          "type": "link",
+          "path": "/Applications"
+        }
+      ]
     }
   },
   "author": "Team-HowMuch"

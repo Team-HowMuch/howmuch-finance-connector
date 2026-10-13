@@ -1,5 +1,10 @@
 "use strict";
 const $ = (id) => document.getElementById(id);
+// Local app metadata remains available even when the API is unreachable.
+window.certificate.appVersion().then((version) => {
+  $("clientVersion").textContent = `Client ver. ${version}`;
+  $("clientVersion").hidden = false;
+}).catch(() => {});
 $("appClose").addEventListener("click", () => {
   window.certificate?.close().catch(() => {});
 });
@@ -9,6 +14,9 @@ let institutions = [],
   claimId,
   qrDeadline,
   sessionDeadline;
+let paired = false,
+  pairTimer,
+  pairEpoch = 0;
 let generation = 0,
   qrLoading = false,
   scanning = false,
@@ -91,11 +99,13 @@ function terminal(session) {
     EXPIRED: "연결 시간이 만료됐어요",
     CANCELLED: "연결이 취소됐어요",
   };
-  stopped(titles[session.status], session.failureMessage || (
-    session.status === "UNKNOWN"
-      ? "처리 결과를 확인한 뒤 다시 연결해 주세요."
-      : "취소한 뒤 다시 시도해 주세요."
-  ));
+  stopped(
+    titles[session.status],
+    session.failureMessage ||
+      (session.status === "UNKNOWN"
+        ? "처리 결과를 확인한 뒤 다시 연결해 주세요."
+        : "취소한 뒤 다시 시도해 주세요."),
+  );
   return true;
 }
 function reset() {
@@ -107,7 +117,9 @@ function reset() {
   $("reject").hidden = false;
   $("cancel").textContent = "취소";
   $("registration").reset();
-  $("registration").hidden = false;
+  $("registration").hidden = true;
+  paired = false;
+  $("pairedNotice").hidden = true;
   $("progress").hidden = true;
   $("refreshQr").hidden = true;
   $("progressTitle").textContent = "인증서 확인 중";
@@ -117,7 +129,7 @@ function reset() {
   $("certificateList").replaceChildren();
   $("submit").disabled = true;
   requirements();
-  discover("auto");
+  beginPairing();
 }
 function requirements() {
   const i = institutions.find(
@@ -131,6 +143,7 @@ function requirements() {
   $("birthField").hidden = !i?.birthDateRequired;
   $("birthDate").required = Boolean(i?.birthDateRequired);
   $("submit").disabled =
+    !paired ||
     !i ||
     !selected ||
     scanning ||
@@ -272,6 +285,7 @@ for (const id of ["password", "accountNumber", "accountPassword", "birthDate"])
   $(id).addEventListener("input", requirements);
 $("registration").addEventListener("submit", async (event) => {
   event.preventDefault();
+  if (!paired) return;
   const epoch = ++generation;
   clearTimeout(timer);
   clearQr();
@@ -280,25 +294,33 @@ $("registration").addEventListener("submit", async (event) => {
   $("registration").hidden = true;
   $("progress").hidden = false;
   $("progress").dataset.state = "processing";
-  step(2);
+  step(3);
   message("");
   try {
-    const submitted = await window.certificate.submit($("organization").value, selected, {
-      password: $("password").value,
-      accountNumber: $("accountFields").hidden ? "" : $("accountNumber").value,
-      accountPassword: $("accountFields").hidden
-        ? ""
-        : $("accountPassword").value,
-      birthDate: $("birthField").hidden ? "" : $("birthDate").value,
-    });
+    const submitted = await window.certificate.submit(
+      $("organization").value,
+      selected,
+      {
+        password: $("password").value,
+        accountNumber: $("accountFields").hidden
+          ? ""
+          : $("accountNumber").value,
+        accountPassword: $("accountFields").hidden
+          ? ""
+          : $("accountPassword").value,
+        birthDate: $("birthField").hidden ? "" : $("birthDate").value,
+      },
+    );
     if (epoch !== generation) return;
     sessionDeadline = Date.parse(`${submitted.expiresAt}Z`);
     if (!terminal(submitted)) poll(epoch);
   } catch (error) {
     const text = await knownError(error);
     if (epoch !== generation) return;
-    stopped("입력 정보를 확인해 주세요", text
-      || "접수 결과를 확인한 뒤 다시 시도해 주세요.");
+    stopped(
+      "입력 정보를 확인해 주세요",
+      text || "접수 결과를 확인한 뒤 다시 시도해 주세요.",
+    );
   } finally {
     if (epoch === generation) {
       clearCredentials();
@@ -306,32 +328,6 @@ $("registration").addEventListener("submit", async (event) => {
     }
   }
 });
-async function qr(epoch = generation) {
-  if (qrLoading || epoch !== generation) return;
-  qrLoading = true;
-  $("refreshQr").disabled = true;
-  try {
-    const q = await window.certificate.qr();
-    if (epoch !== generation) return;
-    $("qrImage").src = q.image;
-    $("qrImage").hidden = false;
-    $("qrCard").hidden = false;
-    qrDeadline = Date.parse(`${q.expiresAt}Z`);
-    $("refreshQr").hidden = true;
-    message("");
-    return true;
-  } catch (error) {
-    const text = await knownError(error);
-    if (epoch !== generation) return false;
-    stopped("QR을 발급하지 못했어요", text
-      || "상태를 확인한 뒤 다시 시도해 주세요.");
-    $("refreshQr").hidden = Number.isFinite(sessionDeadline) && sessionDeadline <= Date.now();
-    return false;
-  } finally {
-    qrLoading = false;
-    $("refreshQr").disabled = false;
-  }
-}
 async function poll(epoch = generation) {
   if (epoch !== generation) return;
   try {
@@ -340,17 +336,21 @@ async function poll(epoch = generation) {
     sessionDeadline = Date.parse(`${s.expiresAt}Z`);
     if (terminal(s)) return;
     if (Number.isFinite(sessionDeadline) && sessionDeadline <= Date.now()) {
-      stopped("연결 시간이 만료됐어요", "취소한 뒤 인증서 가져오기를 다시 시작해 주세요.");
+      stopped(
+        "연결 시간이 만료됐어요",
+        "취소한 뒤 인증서 가져오기를 다시 시작해 주세요.",
+      );
       return;
     }
     message("");
     if (s.status === "READY_FOR_CLAIM") {
       step(3);
       $("progress").dataset.state = "ready";
-      $("progressTitle").textContent = "모바일 앱에서 QR 스캔";
+      $("progressTitle").textContent = "휴대폰에서 연결을 승인해 주세요";
       details("");
       clearClaim();
-      if (!qrDeadline && $("refreshQr").hidden && !await qr(epoch)) return;
+      clearQr();
+      $("refreshQr").hidden = true;
     } else if (s.status === "CLAIM_RESERVED") {
       clearQr();
       step(3);
@@ -359,7 +359,11 @@ async function poll(epoch = generation) {
         claim = await window.certificate.claim();
       } catch (error) {
         // The mobile decision can finish between the status and claim requests.
-        if (["CERTIFICATE_NOT_FOUND", "CERTIFICATE_CONFLICT"].some((code) => error.message.endsWith(code))) {
+        if (
+          ["CERTIFICATE_NOT_FOUND", "CERTIFICATE_CONFLICT"].some((code) =>
+            error.message.endsWith(code),
+          )
+        ) {
           clearClaim();
           $("progress").dataset.state = "processing";
           $("progressTitle").textContent = "금융사 인증 중";
@@ -369,7 +373,10 @@ async function poll(epoch = generation) {
         throw error;
       }
       if (epoch !== generation) return;
-      if (claim.status !== "RESERVED" || !/^\d{6}$/.test(claim.confirmationCode))
+      if (
+        claim.status !== "RESERVED" ||
+        !/^\d{6}$/.test(claim.confirmationCode)
+      )
         throw new Error("INVALID_RESPONSE");
       if (!Number.isFinite(Date.parse(`${claim.expiresAt}Z`)))
         throw new Error("INVALID_RESPONSE");
@@ -380,14 +387,14 @@ async function poll(epoch = generation) {
       $("refreshQr").hidden = true;
       $("claimBox").hidden = false;
       $("confirmationCode").textContent = claim.confirmationCode;
-      $("progressTitle").textContent = "연결 요청이 확인됐어요";
+      $("progressTitle").textContent = "휴대폰에서 연결을 승인해 주세요";
       details("");
     } else {
       clearQr();
       clearClaim();
       $("refreshQr").hidden = true;
       $("progress").dataset.state = "processing";
-      $("progressTitle").textContent = "인증서 확인 중";
+      $("progressTitle").textContent = "금융사 인증 중";
       details("");
     }
     if (qrDeadline) {
@@ -401,37 +408,20 @@ async function poll(epoch = generation) {
   } catch (error) {
     const text = await knownError(error);
     if (epoch !== generation) return;
-    stopped("연결 상태를 확인해 주세요", text
-      || "연결 상태를 확인하지 못했습니다. 잠시 후 다시 확인합니다.");
+    stopped(
+      "연결 상태를 확인해 주세요",
+      text || "연결 상태를 확인하지 못했습니다. 잠시 후 다시 확인합니다.",
+    );
     if (text) {
-      $("refreshQr").hidden = !error.message.endsWith("CERTIFICATE_EXPIRED")
-        || !Number.isFinite(sessionDeadline) || sessionDeadline <= Date.now();
+      $("refreshQr").hidden = true;
       return;
     }
-    $("refreshQr").hidden = Number.isFinite(sessionDeadline) && sessionDeadline <= Date.now();
+    $("refreshQr").hidden =
+      Number.isFinite(sessionDeadline) && sessionDeadline <= Date.now();
   }
   if (epoch === generation) timer = setTimeout(() => poll(epoch), 2000);
 }
-$("refreshQr").addEventListener("click", async () => {
-  const epoch = ++generation;
-  clearTimeout(timer);
-  if (await qr(epoch)) poll(epoch);
-});
-$("reject").addEventListener("click", async () => {
-  const epoch = ++generation;
-  clearTimeout(timer);
-  try {
-    await window.certificate.reject(claimId);
-    if (epoch !== generation) return;
-    clearClaim();
-    if (await qr(epoch)) poll(epoch);
-  } catch (error) {
-    const text = await knownError(error);
-    if (epoch !== generation) return;
-    stopped("요청 거절 결과를 확인해 주세요", text
-      || "요청 거절에 실패했습니다. 다시 시도해주세요.");
-  }
-});
+$("reject").addEventListener("click", () => $("cancel").click());
 $("cancel").addEventListener("click", async () => {
   generation++;
   clearTimeout(timer);
@@ -455,6 +445,7 @@ window.certificate
     }
     $("organization").disabled = institutions.length === 0;
     message(institutions.length ? "" : "현재 연결 가능한 금융사가 없어요.");
+    if (institutions.length) beginPairing();
   })
   .catch((error) =>
     message(
@@ -463,4 +454,74 @@ window.certificate
         : "서버에 연결할 수 없어요. 잠시 후 다시 실행해 주세요.",
     ),
   );
-discover("auto").finally(() => setTimeout(watchStorage, 3000));
+setTimeout(watchStorage, 3000);
+
+async function beginPairing() {
+  const epoch = ++pairEpoch;
+  clearTimeout(pairTimer);
+  paired = false;
+  $("pairing").hidden = false;
+  $("pairingQr").hidden = true;
+  $("retryPairing").hidden = true;
+  $("pairingStatus").textContent = "QR을 준비하고 있어요";
+  $("registration").hidden = true;
+  $("pairedNotice").hidden = true;
+  step(1);
+  try {
+    const q = await window.certificate.pair();
+    if (epoch !== pairEpoch) return;
+    $("pairingQr").src = q.image;
+    $("pairingQr").hidden = false;
+    await pollPairing(epoch, Date.parse(`${q.expiresAt}Z`));
+  } catch (error) {
+    if (epoch !== pairEpoch) return;
+    $("pairingStatus").textContent =
+      (await knownError(error)) || "휴대폰 연결 서비스를 확인해 주세요";
+    $("retryPairing").hidden = false;
+  }
+}
+async function pollPairing(epoch, deadline) {
+  if (epoch !== pairEpoch) return;
+  try {
+    const p = await window.certificate.pairStatus();
+    if (epoch !== pairEpoch) return;
+    if (p.status === "PAIRED") {
+      paired = true;
+      $("pairingQr").removeAttribute("src");
+      $("pairing").hidden = true;
+      $("pairedNotice").hidden = false;
+      $("registration").hidden = false;
+      step(2);
+      requirements();
+      await discover("auto");
+      return;
+    }
+    if (p.status !== "WAITING_FOR_MOBILE" || deadline <= Date.now())
+      throw new Error("CERTIFICATE_EXPIRED");
+    $("pairingStatus").textContent =
+      `${Math.max(0, Math.ceil((deadline - Date.now()) / 1000))}초 남음`;
+  } catch (error) {
+    if (epoch !== pairEpoch) return;
+    const text = await knownError(error);
+    $("pairingStatus").textContent = text || "연결 상태를 다시 확인하고 있어요";
+    if (text) {
+      $("pairingQr").hidden = true;
+      $("pairingQr").removeAttribute("src");
+      $("retryPairing").hidden = false;
+      return;
+    }
+  }
+  if (epoch === pairEpoch)
+    pairTimer = setTimeout(() => pollPairing(epoch, deadline), 1500);
+}
+$("retryPairing").addEventListener("click", async () => {
+  ++pairEpoch;
+  clearTimeout(pairTimer);
+  try {
+    await window.certificate.cancel();
+    await beginPairing();
+  } catch (error) {
+    $("pairingStatus").textContent =
+      (await knownError(error)) || "잠시 후 다시 시도해 주세요";
+  }
+});

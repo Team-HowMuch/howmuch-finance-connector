@@ -16,26 +16,55 @@
         height="34"
         alt=""
       /><span class="brand">인증서 가져오기</span>
-      <button id="appClose" class="app-close" type="button" aria-label="앱 종료" title="앱 종료">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18" /></svg>
+      <span id="clientVersion" class="client-version" hidden></span>
+      <button
+        id="appClose"
+        class="app-close"
+        type="button"
+        aria-label="앱 종료"
+        title="앱 종료"
+      >
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="m6 6 12 12M18 6 6 18" />
+        </svg>
       </button>
     </header>
     <div class="app-layout">
       <nav class="steps" aria-label="인증서 연결 단계">
         <ol>
           <li id="step1" aria-current="step">
-            <span class="step-number">1</span><span>인증서 가져오기</span>
+            <span class="step-number">1</span><span>휴대폰 연결</span>
           </li>
           <li id="step2">
-            <span class="step-number">2</span><span>금융사 인증</span>
+            <span class="step-number">2</span><span>인증서 선택</span>
           </li>
           <li id="step3">
-            <span class="step-number">3</span><span>모바일 연결</span>
+            <span class="step-number">3</span><span>금융사 인증</span>
           </li>
         </ol>
       </nav>
       <main>
-        <form id="registration" autocomplete="off">
+        <section id="pairing" aria-labelledby="pairingTitle">
+          <h1 id="pairingTitle">휴대폰을 먼저 연결해 주세요</h1>
+          <p>얼마 앱에서 QR을 스캔해 주세요</p>
+          <img
+            id="pairingQr"
+            width="256"
+            height="256"
+            alt="휴대폰 연결 QR 코드"
+            hidden
+          />
+          <p id="pairingStatus" role="status" aria-live="polite">
+            QR을 준비하고 있어요
+          </p>
+          <button id="retryPairing" class="primary" type="button" hidden>
+            QR 다시 받기
+          </button>
+        </section>
+        <p id="pairedNotice" class="paired-notice" hidden>
+          휴대폰이 연결됐어요
+        </p>
+        <form id="registration" hidden autocomplete="off">
           <h1>인증서 가져오기</h1>
           <fieldset class="certificates">
             <legend>공동인증서</legend>
@@ -81,7 +110,7 @@
             <div
               class="certificate-panel"
               id="certificatePanel"
-              aria-busy="true"
+              aria-busy="false"
             >
               <div class="certificate-head" aria-hidden="true">
                 <span>소유자</span><span>발급기관</span><span>만료일</span>
@@ -163,7 +192,9 @@
         </form>
         <section id="progress" hidden aria-labelledby="progressTitle">
           <div class="progress-mark" aria-hidden="true"><span></span></div>
-          <h2 id="progressTitle" role="status" aria-live="polite">인증서 확인 중</h2>
+          <h2 id="progressTitle" role="status" aria-live="polite">
+            인증서 확인 중
+          </h2>
           <p id="progressText" class="status-detail" role="alert" hidden></p>
           <div class="qr-card" id="qrCard" hidden>
             <img
@@ -181,7 +212,9 @@
           <div id="claimBox" hidden>
             <p>모바일 화면의 확인 코드</p>
             <strong id="confirmationCode"></strong>
-            <p class="status-detail">모바일 화면과 코드가 같은지 확인해 주세요.</p>
+            <p class="status-detail">
+              모바일 화면과 코드가 같은지 확인해 주세요.
+            </p>
             <button id="reject" class="secondary" type="button">
               요청 거절
             </button>

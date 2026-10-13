@@ -161,17 +161,44 @@ test("Mac release configuration uses explicit ad-hoc signing without disabling r
 });
 
 
-test("DMG uses a solid background without creating a background-image Finder alias", async () => {
+test("DMG resolves branded Retina assets and retains real drag-install items", async () => {
   const { DmgTarget } = require("dmg-builder");
   const { build } = require("../package.json");
+  const root = path.join(__dirname, "..");
   const packager = {
     config: { dmg: build.dmg },
-    appInfo: { productFilename: "Synthetic Certificate" },
+    appInfo: { productFilename: "얼마 인증서 가져오기".normalize("NFD"), version: "0.2.0", name: "howmuch-certificate" },
+    platformSpecificBuildOptions: {},
     getIconPath: async () => null,
+    getResource: async (file) => {
+      const resolved = path.join(root, file);
+      assert.ok(fs.statSync(resolved).isFile());
+      return resolved;
+    },
   };
   const target = new DmgTarget(packager, "dist");
+  // mac_alias normalizes volume paths to NFC; an ASCII mount name prevents an
+  // NFD/NFC mismatch from putting host APFS IDs into the HFS background alias.
+  const volumeName = target.computeVolumeName(0, build.dmg.title);
+  assert.match(volumeName, /^[\x20-\x7e]+$/);
   const options = await target.computeDmgOptions("/synthetic/Certificate.app");
-  assert.equal(options.backgroundColor, "#ffffff");
-  assert.equal(options.background, undefined);
-  assert.ok(options.contents.some((item) => item.type === "link" && item.path === "/Applications"));
+  assert.equal(options.backgroundColor, undefined);
+  const base = fs.readFileSync(options.background);
+  const retina = fs.readFileSync(options.background.replace(".png", "@2x.png"));
+  for (const [png, scale] of [[base, 1], [retina, 2]]) {
+    assert.equal(png.subarray(1, 4).toString(), "PNG");
+    assert.equal(png.readUInt32BE(16), options.window.width * scale);
+    assert.equal(png.readUInt32BE(20), options.window.height * scale);
+  }
+  const app = options.contents.find((item) => item.type === "file");
+  const folder = options.contents.find((item) => item.type === "link" && item.path === "/Applications");
+  assert.ok(app && folder, "App and Applications must remain draggable Finder items.");
+  assert.equal(app.y, folder.y);
+  assert.ok(app.x < folder.x);
+  for (const item of [app, folder]) {
+    assert.ok(item.x - options.iconSize / 2 >= 0);
+    assert.ok(item.x + options.iconSize / 2 <= options.window.width);
+    assert.ok(item.y - options.iconSize / 2 >= 0);
+    assert.ok(item.y + options.iconSize / 2 + 40 <= options.window.height);
+  }
 });

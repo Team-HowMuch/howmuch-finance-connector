@@ -21,7 +21,7 @@ async function run() {
   await fs.access(executable);
   child = spawn(
     executable,
-    ["--remote-debugging-address=127.0.0.1", "--remote-debugging-port=0"],
+    ["--disable-gpu", "--remote-debugging-address=127.0.0.1", "--remote-debugging-port=0"],
     { stdio: ["ignore", "pipe", "pipe"] },
   );
   let output = "";
@@ -77,9 +77,15 @@ async function run() {
       expression: `JSON.stringify({
         url: location.href,
         title: document.title,
+        viewportWidth: innerWidth,
         brand: document.querySelector('.brand')?.textContent,
+        clientVersion: document.getElementById('clientVersion')?.textContent,
+        versionVisible: !document.getElementById('clientVersion')?.hidden,
         heading: document.querySelector('h1')?.textContent,
         form: Boolean(document.getElementById('registration')),
+        formLocked: document.getElementById('registration')?.hidden,
+        pairingVisible: !document.getElementById('pairing')?.hidden,
+        pairingBridge: typeof window.certificate?.pair,
         bridge: typeof window.certificate,
         discovery: typeof window.certificate?.discover,
         rawPicker: typeof window.certificate?.choose,
@@ -97,6 +103,8 @@ async function run() {
       state = JSON.parse(result.result.result.value);
       if (
         state.form &&
+        state.versionVisible &&
+        state.clientVersion === `Client ver. ${require("../package.json").version}` &&
         state.bridge === "object" &&
         state.styles > 0 &&
         state.fontsLoaded &&
@@ -111,7 +119,12 @@ async function run() {
   assert.equal(state?.url, "howmuch-cert://app/index.html");
   assert.equal(state?.title, "인증서 가져오기");
   assert.equal(state?.brand, "인증서 가져오기");
-  assert.equal(state?.heading, "인증서 가져오기");
+  assert.equal(state?.clientVersion, `Client ver. ${require("../package.json").version}`);
+  assert.equal(state?.versionVisible, true);
+  assert.equal(state?.heading, "휴대폰을 먼저 연결해 주세요");
+  assert.equal(state?.formLocked, true);
+  assert.equal(state?.pairingVisible, true);
+  assert.equal(state?.pairingBridge, "function");
   assert.equal(state?.form, true);
   assert.equal(state?.bridge, "object");
   assert.equal(state?.discovery, "function");
@@ -131,6 +144,13 @@ async function run() {
   );
   await fs.mkdir(path.dirname(screenshot), { recursive: true });
   await fs.writeFile(screenshot, Buffer.from(capture.result.data, "base64"));
+  const header = await send("Page.captureScreenshot", {
+    format: "png",
+    clip: { x: 0, y: 0, width: state.viewportWidth, height: 64, scale: 1 },
+  });
+  assert.ok(header.result?.data, "Version header screenshot must be available.");
+  await fs.writeFile(path.join(path.dirname(screenshot), "client-version-header.png"),
+    Buffer.from(header.result.data, "base64"));
   console.log(
     "Packaged startup smoke passed: HTML, styles, icon, discovery, sandboxed preload, screenshot.",
   );

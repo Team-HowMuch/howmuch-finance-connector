@@ -56,7 +56,8 @@ function trusted(handler) {
     } catch (error) {
       throw new Error(
         userErrorMessage(error.message) || /^API_\d{3}$/.test(error.message)
-          ? error.message : "OPERATION_FAILED",
+          ? error.message
+          : "OPERATION_FAILED",
       );
     }
   };
@@ -156,7 +157,7 @@ app.whenReady().then(async () => {
   } catch {
     /* init returns a sanitized configuration error */
   }
-  const icon = path.join(__dirname, "assets", "icon.png");
+  const icon = path.join(__dirname, "assets", process.platform === "darwin" ? "icon-mac.png" : "icon.png");
   if (process.platform === "darwin") app.dock.setIcon(icon);
   Menu.setApplicationMenu(null);
   window = new BrowserWindow({
@@ -199,6 +200,7 @@ app.whenReady().then(async () => {
     client?.cancel().catch(() => {});
     window = undefined;
   });
+  ipcMain.handle("certificate:app-version", trusted(async () => app.getVersion()));
   ipcMain.handle(
     "certificate:init",
     trusted(async () => {
@@ -206,13 +208,41 @@ app.whenReady().then(async () => {
       return client.institutions();
     }),
   );
-  ipcMain.handle("certificate:close", trusted(() => window?.close()));
+  ipcMain.handle(
+    "certificate:pair",
+    trusted(async () => {
+      const pair = await client.startPairing();
+      return {
+        image: await QRCode.toDataURL(
+          JSON.stringify({
+            v: 2,
+            type: "HOWMUCH_CERTIFICATE_PAIRING",
+            pairingId: pair.pairingId,
+            qrToken: pair.qrToken,
+          }),
+          { width: 256, margin: 2 },
+        ),
+        expiresAt: pair.expiresAt,
+      };
+    }),
+  );
+  ipcMain.handle(
+    "certificate:pair-status",
+    trusted(() => client.pairingStatus()),
+  );
+  ipcMain.handle(
+    "certificate:close",
+    trusted(() => window?.close()),
+  );
   ipcMain.handle("certificate:discover", trusted(discover));
-  ipcMain.handle("certificate:failure-message", trusted(async (value) => {
-    if (typeof value !== "string" || value.length > 256) return null;
-    const code = value.match(/(?:^|:\s*)([A-Z][A-Z0-9_]+)$/)?.[1];
-    return userErrorMessage(code);
-  }));
+  ipcMain.handle(
+    "certificate:failure-message",
+    trusted(async (value) => {
+      if (typeof value !== "string" || value.length > 256) return null;
+      const code = value.match(/(?:^|:\s*)([A-Z][A-Z0-9_]+)$/)?.[1];
+      return userErrorMessage(code);
+    }),
+  );
   ipcMain.handle(
     "certificate:storage",
     trusted(async () => storageState(await volumes())),
