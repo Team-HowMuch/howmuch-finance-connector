@@ -2,7 +2,7 @@
 
 PC·USB의 공동인증서를 선택하고, 모바일 QR 승인으로 HowMuch 금융 연결을 만드는 Electron 앱입니다. 설치 이름은 **얼마 인증서 가져오기**, 창 제목은 **인증서 가져오기**입니다.
 
-앱 소스와 Windows 빌드는 이 저장소에서 관리합니다. 인증서 접수·CODEF 호출·connectedId 저장·Kafka Inbox/Outbox는 현재 [Backend API](https://github.com/Team-HowMuch/howmuch-backend-v2)에 있습니다. finance-connector Java 서버를 실행하는 것만으로 인증서 API가 열리지는 않습니다.
+앱 소스와 Windows/macOS 빌드는 이 저장소에서 관리합니다. 인증서 접수·CODEF 호출·connectedId 저장·Kafka Inbox/Outbox는 현재 [Backend API](https://github.com/Team-HowMuch/howmuch-backend-v2)에 있습니다. finance-connector Java 서버를 실행하는 것만으로 인증서 API가 열리지는 않습니다.
 
 ## 개발 실행
 
@@ -36,18 +36,77 @@ Backend에는 PostgreSQL·Redis·Kafka, V46/V47 마이그레이션과 인증서 
 
 ## Windows 설치 파일 빌드
 
-Windows에서 다음을 실행합니다. 첫 실행 시 `npm ci`로 의존성을 설치합니다.
+Windows에서 환경변수로 API 주소를 지정해 빌드합니다. `beforePack`이 주소를 검증하고 `release-config.json`에 기록합니다. 첫 실행 시 `npm ci`로 의존성을 설치합니다.
+
+```powershell
+$env:HOWMUCH_CERTIFICATE_API_ORIGIN = "https://dev.howmuch.wars.p-e.kr"
+npm run dist:win
+```
+
+macOS 등에서 기존 명시적 주소 지정도 사용할 수 있습니다.
 
 ```sh
 npm run configure -- https://dev.howmuch.wars.p-e.kr
 npm run dist:win
 ```
 
-결과: `dist/얼마-인증서-가져오기-<version>-x64-Setup.exe`. x64 NSIS 설치본이며 설치 위치를 선택할 수 있습니다. 공개 API 주소만 `release-config.json`에 생성되고 이 파일은 커밋하지 않습니다. CODEF 키·JWT·인증서·비밀번호를 빌드 설정에 넣지 않습니다.
+`npm run configure`는 명시적 인자 → `HOWMUCH_CERTIFICATE_API_ORIGIN` 순서로 주소를 읽습니다. 빌드 시 환경변수가 있으면 기존 설정 파일보다 우선합니다. 다른 주소로 명시적 configure를 실행했다면 이전 환경변수도 제거하거나 같은 주소로 맞춥니다. `.env` 파일을 자동으로 읽지는 않습니다.
 
-GitHub Actions의 **Certificate Windows app** workflow는 PR에서 Windows 테스트와 패키징 실행 검증을 수행합니다. 설치본은 **Run workflow**에서 대상 브랜치와 `api_origin`을 선택해 빌드합니다. `signed` 기본값은 true입니다. 저장소의 `certificate-windows-release` Environment에 `WINDOWS_CSC_LINK`, `WINDOWS_CSC_KEY_PASSWORD`를 설정해야 서명 빌드가 가능합니다. 내부 검증용 미서명 빌드는 `signed=false`로 실행하며, 서명/SmartScreen 통과를 의미하지 않습니다.
+결과: `dist/얼마-인증서-가져오기-<version>-x64-Setup.exe`. x64 NSIS 설치본이며 설치 위치를 선택할 수 있습니다. 공개 API 주소만 `release-config.json`에 생성되고 이 파일은 커밋하지 않습니다. CODEF 키·JWT·인증서·비밀번호를 빌드 설정에 넣지 않습니다. 설치본의 API 주소는 빌드 때 고정되며 설치 후 환경변수로 바뀌지 않습니다.
 
-완료된 실행의 **howmuch-certificate-windows** artifact에서 설치 파일을 다운로드합니다. 보관 기간은 7일입니다. 자동 Release 게시나 자동 배포는 하지 않습니다.
+## Release 자동 빌드
+
+GitHub Actions의 **Certificate desktop app** workflow가 PR에서 Windows 테스트·Electron smoke·패키징 실행을 검증합니다. 아래 환경 설정 후 앱 전용 GitHub Release를 **Publish release**하면 같은 검증을 거쳐 Windows 설치 파일·macOS DMG와 각각의 `.sha256`을 Release Assets에 자동 첨부합니다. Draft 저장이나 태그 push만으로 게시하지 않습니다.
+
+| 게시 방식 | 태그 예시 | API 환경 |
+|---|---|---|
+| 사전 릴리스 (Set as a pre-release) | `certificate-v0.1.6-rc.1` | `certificate-windows-dev` |
+| 정식 릴리스 | `certificate-v0.1.6` | `certificate-windows-prod` |
+
+태그의 버전은 **릴리스 커밋의** `package.json`과 `package-lock.json` 버전을 맞춘 뒤 `package.json.version`과 정확히 일치시킵니다. 예를 들어 앱 폴더에서 `npm version 0.1.6 --no-git-tag-version`으로 두 파일을 갱신한 후 릴리스 커밋을 준비합니다. `-rc.1` 같은 사전 버전은 반드시 pre-release로 게시합니다. `finance-contracts-v*` 릴리스는 앱 빌드를 실행하지 않습니다.
+
+이미 게시된 사전 릴리스를 정식으로 바꾸는 방식 대신 사전 접미사가 없는 새 버전/태그로 정식 Release를 게시합니다. 이 workflow는 `release.published` 이벤트를 사용합니다. 자세한 이벤트 동작은 [GitHub 공식 문서](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#release)를 참고합니다.
+
+### GitHub Environment 설정
+
+저장소 **Settings → Environments**에서 다음 두 환경을 만들고 환경마다 값을 설정합니다. 기존 `certificate-windows-release`에 서명 Secret이 있다면 새 두 환경에도 등록합니다.
+
+| 항목 | `certificate-windows-dev` | `certificate-windows-prod` |
+|---|---|---|
+| Variable `HOWMUCH_CERTIFICATE_API_ORIGIN` | `https://dev.howmuch.wars.p-e.kr` | `https://api.howmuch.wars.p-e.kr` |
+| Variable `HOWMUCH_REQUIRE_SIGNING` | 현재 `false` | 현재 `false` |
+| Secret `WINDOWS_CSC_LINK` | 서명 인증서 (서명 필수일 때) | 서명 인증서 (서명 필수일 때) |
+| Secret `WINDOWS_CSC_KEY_PASSWORD` | 인증서 비밀번호 | 인증서 비밀번호 |
+
+주소에는 `/api/v2` 같은 경로·쿼리·인증정보를 넣지 않습니다. 주소가 비었거나 HTTPS가 아니면 실패하며 dev 주소로 대체하지 않습니다. `HOWMUCH_REQUIRE_SIGNING`은 Windows 전용입니다. 현재 두 환경은 사용자 결정에 따라 `false`를 사용합니다. 미설정 시 **true**이고 true일 때 서명 키가 없거나 실제 코드 서명이 실패하면 게시하지 않습니다. 미서명 설치본이 필요하면 해당 환경에 `false`를 명시합니다. 이는 Windows SmartScreen 신뢰를 보장하지 않습니다. Environment에 승인/태그 보호 규칙이 설정돼 있다면 그 규칙을 따릅니다.
+
+### 다운로드와 재실행
+
+검증 성공 후 해당 Release의 Assets에서 다음을 받습니다.
+
+- `얼마-인증서-가져오기-<version>-dev-x64-Setup.exe` 또는 `...-prod-x64-Setup.exe`
+- `얼마-인증서-가져오기-<version>-dev-arm64.dmg` 또는 `...-prod-arm64.dmg` (Apple Silicon)
+- `얼마-인증서-가져오기-<version>-dev-x64.dmg` 또는 `...-prod-x64.dmg` (Intel)
+- 각 설치 파일과 같은 이름의 `.sha256`
+
+다운로드한 설치 파일을 PowerShell `Get-FileHash -Algorithm SHA256`으로 확인할 수 있습니다. 자동 업데이트 기능은 포함하지 않습니다. 같은 workflow를 재실행하면 [GitHub CLI `--clobber`](https://cli.github.com/manual/gh_release_upload)로 같은 이름의 asset을 교체하므로 기존 다운로드와 checksum이 달라질 수 있습니다. 정식 배포 후 변경은 새 버전 Release로 게시합니다.
+
+**Run workflow** 수동 실행도 유지합니다. `target_environment`로 dev/prod를 선택하며 `api_origin`을 비우면 해당 Environment의 주소를 사용합니다. 필요할 때만 공개 HTTPS 주소를 재정의합니다. `signed`는 Windows 서명 옵션이며 현재 기본값은 false입니다. Mac은 이 옵션과 무관하게 ad-hoc 서명을 사용합니다. 수동 실행은 Release를 만들거나 첨부하지 않고 **howmuch-certificate-windows-dev/prod**, **howmuch-certificate-macos-dev/prod-arm64/x64** Actions artifact에 7일간 보관합니다.
+
+## macOS 임시 서명 빌드와 설치
+
+Mac에서 저장소의 앱 폴더로 이동한 뒤 실행합니다. Apple 개발자 인증서나 공증용 Secret 없이 빌드합니다.
+
+```sh
+npm ci
+HOWMUCH_CERTIFICATE_API_ORIGIN=https://dev.howmuch.wars.p-e.kr npm run dist:mac
+```
+
+`dist/얼마-인증서-가져오기-<version>-arm64.dmg`와 `...-x64.dmg`가 생성됩니다. Apple Silicon(M1 이상)은 arm64, Intel Mac은 x64를 선택합니다. `mac.identity: "-"`로 앱과 내부 실행 파일에 ad-hoc 서명을 적용합니다. hardened runtime, sandbox와 ASAR 보안 fuse를 유지합니다. Apple 공증은 수행하지 않습니다.
+
+DMG를 열고 앱을 Applications로 드래그한 뒤 실행합니다. 개발자 확인 경고가 나오면, 직접 받은 신뢰 가능한 파일인지 확인한 뒤 **시스템 설정 → 개인정보 보호 및 보안 → 확인 없이 열기**를 사용합니다. ad-hoc 서명은 Developer ID나 Apple 공증을 대신하지 않으며 Gatekeeper의 자동 허용을 보장하지 않습니다. [Apple 실행 안내](https://support.apple.com/en-us/102445)를 참고합니다. 코드/리소스가 손상되었다는 오류는 단순 승인 대상으로 처리하지 말고 설치 파일과 checksum을 다시 확인합니다.
+
+PR에서는 Mac 두 CPU의 native runner에서 Electron 및 패키징 실행을 검증합니다. Release에서는 두 DMG의 ad-hoc 서명·API origin·초기 실행을 검증하고, Windows까지 모두 성공한 뒤 한 게시 job에서 설치 파일을 첨부합니다. Apple Silicon 로컬 검증은 Intel의 native 실행 및 인터넷 다운로드 후 Gatekeeper 동작을 대신하지 않습니다.
 
 ## 사용 방법
 

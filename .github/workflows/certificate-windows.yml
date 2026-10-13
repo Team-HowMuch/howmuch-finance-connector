@@ -1,27 +1,54 @@
-name: Certificate Windows app
+name: Certificate desktop app
 
 on:
   pull_request:
     paths:
       - apps/windows-certificate/**
       - .github/workflows/certificate-windows.yml
+  release:
+    types: [published]
   workflow_dispatch:
     inputs:
-      api_origin:
-        description: Reviewed HTTPS API origin for this installer
+      target_environment:
+        description: API environment for this installer
         required: true
-        default: https://dev.howmuch.wars.p-e.kr
+        default: dev
+        type: choice
+        options: [dev, prod]
+      api_origin:
+        description: Optional HTTPS API origin override (uses Environment variable when empty)
+        required: false
         type: string
       signed:
-        description: Require Windows code signing
-        default: true
+        description: Require Windows code signing (macOS always uses ad-hoc signing)
+        default: false
         type: boolean
 
 permissions:
   contents: read
 
+concurrency:
+  group: certificate-windows-${{ github.event.release.tag_name || github.ref }}
+  cancel-in-progress: false
+
 jobs:
+  target:
+    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'release' && startsWith(github.event.release.tag_name, 'certificate-v'))
+    runs-on: ubuntu-latest
+    outputs:
+      channel: ${{ steps.target.outputs.channel }}
+      environment: ${{ steps.target.outputs.environment }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Validate release version and select environment
+        id: target
+        run: node apps/windows-certificate/scripts/release.cjs
+
   test:
+    if: github.event_name != 'release' || startsWith(github.event.release.tag_name, 'certificate-v')
     runs-on: windows-latest
     defaults:
       run:
@@ -40,7 +67,7 @@ jobs:
       - name: Configure packaging fixture
         run: node scripts/configure.cjs https://certificate-api.example.test
       - name: Build actual packaged app
-        run: npm exec -- electron-builder --win dir --x64
+        run: npm exec -- electron-builder --win dir --x64 --publish never
       - name: Verify packaged renderer startup
         run: node test/packaged-smoke.cjs "dist/win-unpacked/얼마 인증서 가져오기.exe"
       - uses: actions/upload-artifact@v4
@@ -50,11 +77,11 @@ jobs:
           path: apps/windows-certificate/dist/packaged-startup-smoke.png
           if-no-files-found: ignore
           retention-days: 7
+
   installer:
-    if: github.event_name == 'workflow_dispatch'
-    needs: test
+    needs: [target, test]
     runs-on: windows-latest
-    environment: certificate-windows-release
+    environment: ${{ needs.target.outputs.environment }}
     defaults:
       run:
         working-directory: apps/windows-certificate
@@ -66,20 +93,131 @@ jobs:
           cache: npm
           cache-dependency-path: apps/windows-certificate/package-lock.json
       - run: npm ci
-      - name: Configure reviewed API origin
+      - name: Configure API origin
         env:
-          CERTIFICATE_BUILD_API_ORIGIN: ${{ inputs.api_origin }}
-        run: node scripts/configure.cjs "$env:CERTIFICATE_BUILD_API_ORIGIN"
+          HOWMUCH_CERTIFICATE_API_ORIGIN: ${{ inputs.api_origin || vars.HOWMUCH_CERTIFICATE_API_ORIGIN }}
+        run: npm run configure
       - name: Build installer
         env:
-          HOWMUCH_REQUIRE_SIGNING: ${{ inputs.signed }}
+          HOWMUCH_REQUIRE_SIGNING: ${{ github.event_name == 'workflow_dispatch' && format('{0}', inputs.signed) || vars.HOWMUCH_REQUIRE_SIGNING || 'true' }}
           CSC_LINK: ${{ secrets.WINDOWS_CSC_LINK }}
           CSC_KEY_PASSWORD: ${{ secrets.WINDOWS_CSC_KEY_PASSWORD }}
         run: npm run dist:win
       - name: Verify release app startup
         run: node test/packaged-smoke.cjs "dist/win-unpacked/얼마 인증서 가져오기.exe"
+      - name: Prepare installer and SHA-256
+        env:
+          CERTIFICATE_CHANNEL: ${{ needs.target.outputs.channel }}
+        run: node scripts/prepare-artifacts.cjs win x64
       - uses: actions/upload-artifact@v4
         with:
-          name: howmuch-certificate-windows
-          path: apps/windows-certificate/dist/*Setup.exe*
+          name: howmuch-certificate-windows-${{ needs.target.outputs.channel }}
+          path: apps/windows-certificate/dist/release/*
+          if-no-files-found: error
           retention-days: 7
+
+  mac-test:
+    if: github.event_name != 'release' || startsWith(github.event.release.tag_name, 'certificate-v')
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-15
+            arch: arm64
+          - runner: macos-15-intel
+            arch: x64
+    runs-on: ${{ matrix.runner }}
+    defaults:
+      run:
+        working-directory: apps/windows-certificate
+    # This job receives no signing credentials or Environment secrets.
+    env:
+      CSC_FOR_PULL_REQUEST: 'true'
+      CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+      HOWMUCH_CERTIFICATE_API_ORIGIN: https://certificate-api.example.test
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: apps/windows-certificate/package-lock.json
+      - run: npm ci
+      - run: npm test
+      - run: npm run test:smoke
+      - name: Build ad-hoc signed fixture
+        run: npm exec -- electron-builder --mac dir --${{ matrix.arch }} --publish never
+      - name: Verify ad-hoc signature and packaged startup
+        run: node scripts/verify-mac.cjs ${{ matrix.arch }}
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: certificate-mac-startup-${{ matrix.arch }}
+          path: apps/windows-certificate/dist/packaged-startup-smoke.png
+          if-no-files-found: ignore
+          retention-days: 7
+
+  mac-installer:
+    needs: [target, mac-test]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-15
+            arch: arm64
+          - runner: macos-15-intel
+            arch: x64
+    runs-on: ${{ matrix.runner }}
+    environment: ${{ needs.target.outputs.environment }}
+    defaults:
+      run:
+        working-directory: apps/windows-certificate
+    env:
+      CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: apps/windows-certificate/package-lock.json
+      - run: npm ci
+      - name: Configure API origin
+        env:
+          HOWMUCH_CERTIFICATE_API_ORIGIN: ${{ inputs.api_origin || vars.HOWMUCH_CERTIFICATE_API_ORIGIN }}
+        run: npm run configure
+      - name: Build ad-hoc signed DMG
+        run: npm exec -- electron-builder --mac dmg --${{ matrix.arch }} --publish never
+      - name: Verify ad-hoc signature and packaged startup
+        env:
+          HOWMUCH_CERTIFICATE_API_ORIGIN: ${{ inputs.api_origin || vars.HOWMUCH_CERTIFICATE_API_ORIGIN }}
+        run: node scripts/verify-mac.cjs ${{ matrix.arch }}
+      - name: Prepare DMG and SHA-256
+        env:
+          CERTIFICATE_CHANNEL: ${{ needs.target.outputs.channel }}
+        run: node scripts/prepare-artifacts.cjs mac ${{ matrix.arch }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: howmuch-certificate-macos-${{ needs.target.outputs.channel }}-${{ matrix.arch }}
+          path: apps/windows-certificate/dist/release/*
+          if-no-files-found: error
+          retention-days: 7
+
+  publish:
+    if: github.event_name == 'release'
+    needs: [target, installer, mac-installer]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: howmuch-certificate-*
+          path: release-assets
+          merge-multiple: true
+      - name: Attach all verified installers to Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          CERTIFICATE_RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: gh release upload "$CERTIFICATE_RELEASE_TAG" release-assets/* --clobber

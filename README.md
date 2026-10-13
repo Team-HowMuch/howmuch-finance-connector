@@ -21,7 +21,7 @@ docker compose -f compose.test.yml down -v
 
 ## 공동인증서 가져오기 앱
 
-Windows 설치 앱은 [`apps/windows-certificate`](apps/windows-certificate/README.md)에서 개발합니다. Node.js 24를 사용하며 Java connector 서버와 별도로 빌드합니다. 인증서 API/CODEF 실행은 현재 Backend API가 담당합니다.
+Windows/macOS 설치 앱은 [`apps/windows-certificate`](apps/windows-certificate/README.md)에서 개발합니다. Node.js 24를 사용하며 Java connector 서버와 별도로 빌드합니다. 인증서 API/CODEF 실행은 현재 Backend API가 담당합니다.
 
 ```sh
 cd apps/windows-certificate
@@ -32,4 +32,4 @@ npm run configure -- https://dev.howmuch.wars.p-e.kr
 npm run dist:win
 ```
 
-설치 파일 위치, GitHub Actions 다운로드, 로컬 API 연결, USB 탐색, QR/모바일 승인과 오류 대응은 [앱 빌드·사용 가이드](apps/windows-certificate/README.md)를 확인합니다.
+`certificate-v<version>` Release 게시 시 Windows 설치 파일과 macOS Apple Silicon/Intel DMG를 자동 빌드합니다. macOS는 Apple 인증서 없이 ad-hoc 서명을 사용합니다. 사전 릴리스는 dev, 정식 릴리스는 prod API를 GitHub Environment 변수로 주입합니다. 환경 설정, Release 다운로드, 로컬 API 연결, USB 탐색, QR/모바일 승인과 오류 대응은 [앱 빌드·사용 가이드](apps/windows-certificate/README.md)를 확인합니다.
