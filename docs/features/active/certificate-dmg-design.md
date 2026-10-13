@@ -72,4 +72,6 @@ DMG를 열면 브랜드와 설치 안내, 앱 아이콘, 화살표, Applications
 - 환경별 API는 기존 GitHub Environment 사용. 앱 ID 분리는 이번 변경 범위에 포함하지 않는다.
 - 최신 QR 흐름의 Backend V50/#517 및 모바일 QR v2 연동 선행 배포 조건은 Release 안내에 유지한다.
 
-게시 전 통합 검증: Node 40개, 실제 Electron 초기 QR/만료/금융사 인증/최종 승인/암호 오류 smoke, 별도 PostgreSQL(test profile)의 Gradle clean build 25개 테스트 통과. rc 버전 변경 후 Node 40개 재검증 통과.
+게시 전 통합 검증: Node 40개, 실제 Electron 초기 QR/만료/금융사 인증/최종 승인/암호 오류 smoke, 별도 PostgreSQL(test profile)의 Gradle clean build 21개 테스트 통과. rc 버전 변경 후 Node 40개 재검증 통과.
+
+정식 버전 0.1.9로 package/lock 변경 후 Node 40개 통과. JUnit XML 합계로 Gradle 테스트 수 21개(실패/오류/skip 0)를 확인해 이전 기록의 25개 오기를 정정했다.
