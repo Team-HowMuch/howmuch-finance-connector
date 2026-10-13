@@ -132,7 +132,7 @@ test("release assets identify platform, environment and architecture with matchi
   ]) {
     fs.writeFileSync(path.join(dist, `얼마-인증서-가져오기-0.2.0-${arch}${suffix}`), content);
     const output = await prepareArtifact({ platform, arch, channel, version: "0.2.0", dist });
-    assert.equal(path.basename(output), `얼마-인증서-가져오기-0.2.0-${channel}-${arch}${suffix}`);
+    assert.equal(path.basename(output), `HowMuch-Certificate-0.2.0-${channel}-${arch}${suffix}`);
     assert.deepEqual(fs.readFileSync(output), content);
     assert.equal(fs.readFileSync(`${output}.sha256`, "utf8"),
       `${createHash("sha256").update(content).digest("hex")}  ${path.basename(output)}\n`);

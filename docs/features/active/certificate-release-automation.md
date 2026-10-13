@@ -1,6 +1,6 @@
 # Feature Plan: 인증서 앱 릴리스 자동 빌드
 
-- Status: 로컬 구현·검증 완료, Windows/macOS 로컬 구현·검증 완료, GitHub 설정 완료, 원격 실행 대기
+- Status: 로컬 구현·검증 완료, 0.1.6-rc.3 원격 자동 빌드·게시·체크섬 검증 완료
 - Last updated: 2026-10-13
 - Related issue: [#27](https://github.com/Team-HowMuch/howmuch-finance-connector/issues/27)
 - Related PR: 기존 앱 [#25](https://github.com/Team-HowMuch/howmuch-finance-connector/pull/25)의 후속
@@ -149,3 +149,21 @@ GitHub Runner의 CPU 변경에 영향을 받지 않도록 [공식 runner 목록]
 rc.2는 PR의 모든 native 검증과 Release의 Windows/arm64 설치본을 통과했지만 Intel DMG 생성에서 `dmgbuild/core.py`의 `backgroundImageAlias → mac_alias → struct.pack(">I")`가 32비트 범위를 넘는 file ID로 실패했다. 앱 서명/실행 오류가 아니며 실패 로그는 run `38368024014`에 보존한다.
 
 설치된 dmg-builder 26.15.3 경로를 확인하고 `build.dmg.backgroundColor: "#ffffff"`를 지정한다. 이 옵션은 배경 이미지 alias 생성을 사용하지 않으며 app/Applications 드래그 설치 경계는 유지한다. 실제 DmgTarget 옵션 생성 테스트로 background 파일이 없고 Applications link가 유지됨을 확인한다. 태그를 이동하지 않고 `0.1.6-rc.3`으로 다시 게시한다.
+
+### rc.3 원격 게시 성공과 다운로드 파일명
+
+- Release run `38368915970`의 모든 8개 job 성공. Windows x64, Mac native arm64/Intel x64의 smoke·패키징 서명/실행·설치본 생성·자동 첨부를 확인했다.
+- PR의 Connector CI `38368915802`와 데스크톱 CI `38368915812`도 성공했다.
+- GitHub가 한글 업로드 파일명을 `-.-.-...`로 정규화하는 것을 확인했다. 배포 이름을 `HowMuch-Certificate-<version>-<channel>-<arch>`로 고정한다. 실제 앱 이름과 로컬 builder 출력 이름은 유지한다.
+- rc.3의 이미 CI에서 검증된 설치 바이너리는 다시 만들지 않고 Release asset 이름만 정리한다. SHA-256 텍스트의 파일명도 정리하고 원래 CI checksum 및 GitHub의 binary digest와 대조한다. 공개 태그는 이동하지 않는다. 후속 자동 빌드는 공통 artifact 준비 스크립트에서 영문 이름을 사용한다.
+- 최종 Release: https://github.com/Team-HowMuch/howmuch-finance-connector/releases/tag/certificate-v0.1.6-rc.3
+- PR: https://github.com/Team-HowMuch/howmuch-finance-connector/pull/28 (develop 대상, 리뷰 대기)
+
+### 완료 기록
+
+- Release source commit: `c439288579f00f3ca4fcb2a25e9506ebd42dc5cb` (태그 이동 없음).
+- 설치 파일 3개와 SHA-256 3개 확인. 원래 CI checksum, GitHub binary digest, 최종 다운로드 checksum의 hash가 모두 일치하며 checksum에 적힌 이름도 실제 asset 이름과 일치한다.
+- `HowMuch-Certificate-0.1.6-rc.3-dev-arm64.dmg`: 133952008 bytes.
+- `HowMuch-Certificate-0.1.6-rc.3-dev-x64-Setup.exe`: 113416865 bytes.
+- `HowMuch-Certificate-0.1.6-rc.3-dev-x64.dmg`: 139548642 bytes.
+- 영문 파일명 수정은 앱 바이너리 변경이 아닌 배포 스크립트 후속 변경이며 PR branch에 함께 올린다. 원격 검증 결과는 이슈 #27 및 PR #28에 기록했다. PR은 임의로 머지하지 않았다.

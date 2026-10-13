@@ -82,11 +82,11 @@ GitHub Actions의 **Certificate desktop app** workflow가 PR에서 Windows 테�
 
 ### 다운로드와 재실행
 
-검증 성공 후 해당 Release의 Assets에서 다음을 받습니다.
+검증 성공 후 해당 Release의 Assets에서 다음을 받습니다. GitHub의 한글 파일명 변환을 피하기 위해 배포 파일명은 영문으로 사용하고, 앱 표시 이름은 얼마 인증서 가져오기를 유지합니다.
 
-- `얼마-인증서-가져오기-<version>-dev-x64-Setup.exe` 또는 `...-prod-x64-Setup.exe`
-- `얼마-인증서-가져오기-<version>-dev-arm64.dmg` 또는 `...-prod-arm64.dmg` (Apple Silicon)
-- `얼마-인증서-가져오기-<version>-dev-x64.dmg` 또는 `...-prod-x64.dmg` (Intel)
+- `HowMuch-Certificate-<version>-dev-x64-Setup.exe` 또는 `...-prod-x64-Setup.exe`
+- `HowMuch-Certificate-<version>-dev-arm64.dmg` 또는 `...-prod-arm64.dmg` (Apple Silicon)
+- `HowMuch-Certificate-<version>-dev-x64.dmg` 또는 `...-prod-x64.dmg` (Intel)
 - 각 설치 파일과 같은 이름의 `.sha256`
 
 다운로드한 설치 파일을 PowerShell `Get-FileHash -Algorithm SHA256`으로 확인할 수 있습니다. 자동 업데이트 기능은 포함하지 않습니다. 같은 workflow를 재실행하면 [GitHub CLI `--clobber`](https://cli.github.com/manual/gh_release_upload)로 같은 이름의 asset을 교체하므로 기존 다운로드와 checksum이 달라질 수 있습니다. 정식 배포 후 변경은 새 버전 Release로 게시합니다.

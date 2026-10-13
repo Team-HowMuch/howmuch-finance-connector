@@ -10,7 +10,7 @@ async function prepareArtifact({ platform, arch, channel, version, dist = "dist"
     throw new Error("Invalid installer platform, architecture, channel or version.");
   const suffix = platform === "win" ? "-Setup.exe" : ".dmg";
   const source = path.join(dist, `얼마-인증서-가져오기-${version}-${arch}${suffix}`);
-  const name = `얼마-인증서-가져오기-${version}-${channel}-${arch}${suffix}`;
+  const name = `HowMuch-Certificate-${version}-${channel}-${arch}${suffix}`;
   const output = path.join(dist, "release", name);
   const hash = createHash("sha256");
   await fs.promises.mkdir(path.dirname(output), { recursive: true });
