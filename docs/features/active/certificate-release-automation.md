@@ -167,3 +167,21 @@ rc.2는 PR의 모든 native 검증과 Release의 Windows/arm64 설치본을 통�
 - `HowMuch-Certificate-0.1.6-rc.3-dev-x64-Setup.exe`: 113416865 bytes.
 - `HowMuch-Certificate-0.1.6-rc.3-dev-x64.dmg`: 139548642 bytes.
 - 영문 파일명 수정은 앱 바이너리 변경이 아닌 배포 스크립트 후속 변경이며 PR branch에 함께 올린다. 원격 검증 결과는 이슈 #27 및 PR #28에 기록했다. PR은 임의로 머지하지 않았다.
+
+## 9. 운영 정식 릴리스 0.1.6 (2026-10-13)
+
+사용자가 운영 배포용 정식 Release 게시를 요청했다. PR #28 및 develop→main PR #29가 merge되어 앱/자동화 코드가 두 브랜치에 동일하게 반영된 것을 확인했다. 최신 origin/develop에서 별도 `build/certificate-v0.1.6` branch를 만들어 package/lock 버전만 `0.1.6`으로 올린다.
+
+- Tag: `certificate-v0.1.6`, prerelease=false, Latest 정식 릴리스.
+- API: GitHub Environment `certificate-windows-prod`의 `https://api.howmuch.wars.p-e.kr`. 해당 공개 변수 및 `HOWMUCH_REQUIRE_SIGNING=false` 재조회 완료.
+- Windows 미서명, macOS ad-hoc/hardened runtime 유지, Apple 공증 없음.
+- 앱 기능/서버/API/DB 변경 및 Flyway migration 없음.
+- 커밋 경계: `build(certificate): 운영 배포용 0.1.6 버전 준비` (package/lock 및 릴리스 기록).
+- Node 36개, 태그/정식 채널 선택, actionlint, diff/문서 경로 검증 후 commit·push·develop 대상 PR 및 정식 Release 게시. PR을 임의로 merge하지 않는다.
+- Release Windows/arm64/x64 빌드·패키징 실행·6개 Assets 및 GitHub digest/다운로드 SHA-256 일치를 확인한다.
+
+### 운영 API 사전 확인
+
+`GET https://api.howmuch.wars.p-e.kr/api/v2/certificate-registrations/institutions`가 HTTP 401 / `UNAUTHORIZED`를 반환했다. 설치 앱은 로그인 전에 이 공개 API를 호출한다. 현재 Backend 소스의 해당 경로는 permitAll이므로 실제 배포된 백엔드 버전/보안 설정 확인이 필요하다. 원인을 단정하거나 이 작업에서 서버 보안을 수정하지 않는다. 정식 설치본 생성과 구분해 Release 안내와 최종 인계에 명시한다.
+
+운영 게시 전 로컬 검증: Node 36개, Gradle 전체 25개(별도 PostgreSQL, test profile), actionlint 및 git diff --check 통과.
