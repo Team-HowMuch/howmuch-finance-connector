@@ -8,6 +8,7 @@ const http = require("node:http"),
   os = require("node:os"),
   assert = require("node:assert/strict"),
   { X509Certificate } = require("node:crypto");
+app.disableHardwareAcceleration();
 let server,
   directory,
   paired = false,
