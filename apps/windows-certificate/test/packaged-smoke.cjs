@@ -11,6 +11,7 @@ if (!executable) throw new Error("Pass the packaged executable path.");
 const screenshot = path.resolve(
   process.argv[3] || "dist/packaged-startup-smoke.png",
 );
+const STARTUP_TIMEOUT_MS = 60_000, RENDER_TIMEOUT_MS = 30_000;
 const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 let child, socket, debuggerAddress;
 const pending = new Map();
@@ -38,8 +39,9 @@ async function run() {
   child.on("exit", (code, signal) => {
     exit = { code, signal };
   });
-  const deadline = Date.now() + 20_000;
-  while (!debuggerAddress && !exit && !startupError && Date.now() < deadline)
+  // First-launch signature checks and Rosetta translation need their own budget.
+  const startupDeadline = Date.now() + STARTUP_TIMEOUT_MS;
+  while (!debuggerAddress && !exit && !startupError && Date.now() < startupDeadline)
     await delay(100);
   assert.ok(!startupError, "Packaged executable could not be started.");
   assert.ok(!exit, "Packaged app exited before creating its renderer.");
@@ -47,7 +49,7 @@ async function run() {
   assert.equal(debuggerAddress.hostname, "127.0.0.1");
   const origin = `http://127.0.0.1:${debuggerAddress.port}`;
   let target;
-  while (!target && Date.now() < deadline) {
+  while (!target && Date.now() < startupDeadline) {
     const list = await (await fetch(`${origin}/json`)).json();
     target = list.find((item) => item.type === "page");
     if (!target) await delay(100);
@@ -69,7 +71,8 @@ async function run() {
     }
   };
   let state;
-  while (Date.now() < deadline) {
+  const rendererDeadline = Date.now() + RENDER_TIMEOUT_MS;
+  while (Date.now() < rendererDeadline) {
     const result = await send("Runtime.evaluate", {
       expression: `JSON.stringify({
         url: location.href,
@@ -113,7 +116,8 @@ async function run() {
   assert.equal(state?.bridge, "object");
   assert.equal(state?.discovery, "function");
   assert.equal(state?.rawPicker, "undefined");
-  assert.ok(state?.iconLoaded && state?.scanDone);
+  assert.ok(state?.iconLoaded, "Packaged icon did not load.");
+  assert.equal(state?.scanDone, true, "Certificate discovery did not finish.");
   assert.equal(state?.node, "undefined");
   assert.ok(state?.styles > 0);
   assert.ok(state?.fontsLoaded, "Bundled Pretendard fonts did not load.");
@@ -143,7 +147,7 @@ function send(method, params) {
 const timeout = setTimeout(() => {
   console.error("Packaged startup smoke timed out.");
   finish(1);
-}, 25_000);
+}, STARTUP_TIMEOUT_MS + RENDER_TIMEOUT_MS + 10_000);
 function finish(code) {
   clearTimeout(timeout);
   socket?.close();

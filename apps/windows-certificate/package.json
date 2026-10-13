@@ -1,6 +1,6 @@
 {
   "name": "howmuch-certificate",
-  "version": "0.1.5",
+  "version": "0.1.6-rc.3",
   "private": true,
   "description": "얼마 인증서 가져오기",
   "main": "src/main.cjs",
@@ -8,8 +8,9 @@
     "start": "electron .",
     "test": "node --test test/*.test.cjs",
     "configure": "node scripts/configure.cjs",
-    "dist:win": "electron-builder --win nsis --x64",
-    "test:smoke": "electron test/smoke.cjs"
+    "dist:win": "electron-builder --win nsis --x64 --publish never",
+    "test:smoke": "electron test/smoke.cjs",
+    "dist:mac": "electron-builder --mac dmg --arm64 --x64 --publish never"
   },
   "dependencies": {
     "qrcode": "1.5.4"
@@ -39,7 +40,12 @@
     "mac": {
       "extendInfo": {
         "NSRemovableVolumesUsageDescription": "USB에 저장된 공동인증서를 찾기 위해 이동식 디스크에 접근합니다."
-      }
+      },
+      "identity": "-",
+      "notarize": false,
+      "hardenedRuntime": true,
+      "artifactName": "얼마-인증서-가져오기-${version}-${arch}.${ext}",
+      "target": "dmg"
     },
     "nsis": {
       "oneClick": false,
@@ -54,6 +60,9 @@
       "enableNodeCliInspectArguments": false,
       "enableEmbeddedAsarIntegrityValidation": true,
       "onlyLoadAppFromAsar": true
+    },
+    "dmg": {
+      "backgroundColor": "#ffffff"
     }
   },
   "author": "Team-HowMuch"

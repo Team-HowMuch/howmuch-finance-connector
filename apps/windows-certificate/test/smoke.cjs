@@ -3,6 +3,7 @@
 const { app, BrowserWindow, dialog } = require("electron");
 const http = require("node:http");
 const fs = require("node:fs/promises");
+const fsSync = require("node:fs");
 const path = require("node:path");
 const os = require("node:os");
 const assert = require("node:assert/strict");
@@ -23,7 +24,6 @@ require("../src/volumes.cjs").removableVolumes = async () => ({
 require("../src/certificates.cjs").defaultRoots = () => [
   path.join(directory, "missing-computer"),
 ];
-require("../src/main.cjs");
 const id = "00000000-0000-4000-8000-000000000001";
 let status = "CREATED",
   uploads = 0,
@@ -44,14 +44,14 @@ async function waitUntil(window, expression, description) {
   assert.equal(await window.webContents.executeJavaScript(expression), true, description);
 }
 async function run() {
-  directory = await fs.mkdtemp(
+  directory = fsSync.mkdtempSync(
     path.join(os.tmpdir(), "howmuch-certificate-smoke-"),
   );
   const der = new X509Certificate(
-    await fs.readFile(path.join(__dirname, "fixtures", "certificate.pem")),
+    fsSync.readFileSync(path.join(__dirname, "fixtures", "certificate.pem")),
   ).raw;
-  await fs.writeFile(path.join(directory, "signCert.der"), der);
-  await fs.writeFile(path.join(directory, "signPri.key"), Buffer.from([2]));
+  fsSync.writeFileSync(path.join(directory, "signCert.der"), der);
+  fsSync.writeFileSync(path.join(directory, "signPri.key"), Buffer.from([2]));
   fixtureVolumes = [{ root: directory, id: "synthetic-usb-1" }];
   dialog.showOpenDialog = async (_window, options) => {
     assert.deepEqual(options.properties, ["openDirectory"]);
@@ -140,9 +140,14 @@ async function run() {
     return send({ id, status, failureCode, failureMessage: "synthetic-private-response",
       expiresAt: new Date(Date.now() + 600_000).toISOString().replace("Z", "") });
   });
-  await new Promise((resolve) =>
-    server.listen(fixturePort, "127.0.0.1", resolve),
-  );
+  const listening = new Promise((resolve, reject) => {
+    server.once("error", reject);
+    server.listen(fixturePort, "127.0.0.1", resolve);
+  });
+  // Prepare files and bind the API before Electron can initialize the renderer.
+  // Import synchronously, before app.ready, so privileged scheme registration remains valid.
+  require("../src/main.cjs");
+  await listening;
   process.env.HOWMUCH_CERTIFICATE_LOCAL = "1";
   process.env.HOWMUCH_CERTIFICATE_API_ORIGIN = `http://127.0.0.1:${server.address().port}`;
   await app.whenReady();
