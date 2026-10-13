@@ -10,16 +10,20 @@ class CertificateClient {
   #origin;
   #fetch;
   #session;
+  #pairing;
   constructor(origin, fetchImpl = fetch, local = false) {
     this.#origin = apiOrigin(origin, local);
     this.#fetch = fetchImpl;
   }
-  async #request(method, suffix = "", body, upload = false) {
+  async #request(method, suffix = "", body, upload = false, pairing = false) {
     const headers = { "Content-Type": "application/json" };
-    if (this.#session) headers["X-PC-Capability"] = this.#session.pcCapability;
+    const capability = pairing
+      ? this.#pairing?.pcCapability
+      : this.#session?.pcCapability;
+    if (capability) headers["X-PC-Capability"] = capability;
     if (upload) headers["X-Upload-Capability"] = this.#session.uploadCapability;
     const response = await this.#fetch(
-      `${this.#origin}/api/v2/certificate-registrations${suffix}`,
+      `${this.#origin}/api/v2/${pairing ? "certificate-pairings" : "certificate-registrations"}${suffix}`,
       {
         method,
         headers,
@@ -39,7 +43,9 @@ class CertificateClient {
     try {
       parsed = JSON.parse(Buffer.concat(chunks).toString("utf8"));
     } catch {
-      throw new Error(response.ok ? "INVALID_RESPONSE" : `API_${response.status}`);
+      throw new Error(
+        response.ok ? "INVALID_RESPONSE" : `API_${response.status}`,
+      );
     }
     if (!response.ok || !parsed.success) {
       const code = parsed.error?.code;
@@ -53,10 +59,65 @@ class CertificateClient {
     if (!Array.isArray(list)) throw new Error("INVALID_RESPONSE");
     return list;
   }
+  async startPairing() {
+    if (this.#pairing || this.#session) throw new Error("SESSION_EXISTS");
+    const p = await this.#request("POST", "", {}, false, true);
+    if (
+      !/^[0-9a-f-]{36}$/.test(p.id) ||
+      !/^[\w-]{43}$/.test(p.pcCapability) ||
+      !/^[\w-]{43}$/.test(p.qrToken) ||
+      p.status !== "WAITING_FOR_MOBILE" ||
+      !Number.isFinite(Date.parse(`${p.expiresAt}Z`)) ||
+      !Number.isFinite(Date.parse(`${p.qrExpiresAt}Z`))
+    )
+      throw new Error("INVALID_RESPONSE");
+    this.#pairing = p;
+    return { pairingId: p.id, qrToken: p.qrToken, expiresAt: p.qrExpiresAt };
+  }
+  async pairingStatus() {
+    if (!this.#pairing) throw new Error("NO_SESSION");
+    const p = await this.#request(
+      "GET",
+      `/${this.#pairing.id}/pc`,
+      undefined,
+      false,
+      true,
+    );
+    if (
+      p.id !== this.#pairing.id ||
+      ![
+        "WAITING_FOR_MOBILE",
+        "PAIRED",
+        "EXPIRED",
+        "CANCELLED",
+        "CREATED",
+        "SUBMITTED",
+        "REGISTERING",
+        "READY_FOR_CLAIM",
+        "CLAIM_RESERVED",
+        "BOUND",
+        "FAILED",
+        "UNKNOWN",
+      ].includes(p.status)
+    )
+      throw new Error("INVALID_RESPONSE");
+    this.#pairing.status = p.status;
+    return { status: p.status, expiresAt: p.expiresAt };
+  }
   async create(organization) {
     if (this.#session) throw new Error("SESSION_EXISTS");
     if (!/^[0-9]{4}$/.test(organization)) throw new Error("INVALID_INPUT");
-    const s = await this.#request("POST", "", { organization });
+    if (this.#pairing && this.#pairing.status !== "PAIRED")
+      throw new Error("CERTIFICATE_CONFLICT");
+    const s = this.#pairing
+      ? await this.#request(
+          "POST",
+          `/${this.#pairing.id}/registrations`,
+          { organization },
+          false,
+          true,
+        )
+      : await this.#request("POST", "", { organization });
     if (
       !/^[0-9a-f-]{36}$/.test(s.id) ||
       !/^[\w-]{43}$/.test(s.pcCapability) ||
@@ -80,7 +141,9 @@ class CertificateClient {
       ? legacyCodes[s.failureCode]
       : s.failureCode;
     const failureCode = code
-      ? userErrorMessage(code) ? code : "CODEF_UNMAPPED_ERROR"
+      ? userErrorMessage(code)
+        ? code
+        : "CODEF_UNMAPPED_ERROR"
       : null;
     return {
       id: s.id,
@@ -112,6 +175,7 @@ class CertificateClient {
     return this.#safe(await this.#request("GET", `/${this.#id()}`));
   }
   async qr() {
+    if (this.#pairing) throw new Error("CERTIFICATE_CONFLICT");
     return this.#request("POST", `/${this.#id()}/qr`);
   }
   async claim() {
@@ -126,12 +190,23 @@ class CertificateClient {
       if (this.#session && this.#session.status !== "BOUND")
         await this.#request("DELETE", `/${this.#id()}`);
     } catch (error) {
-      if (!["API_404", "CERTIFICATE_NOT_FOUND"].includes(error.message)) throw error;
+      if (!["API_404", "CERTIFICATE_NOT_FOUND"].includes(error.message))
+        throw error;
+    }
+    if (this.#pairing && this.#session?.status !== "BOUND") {
+      await this.#request(
+        "DELETE",
+        `/${this.#pairing.id}/pc`,
+        undefined,
+        false,
+        true,
+      );
     }
     this.clear();
   }
   clear() {
     this.#session = undefined;
+    this.#pairing = undefined;
   }
 }
 module.exports = { CertificateClient, userErrorMessage };

@@ -631,3 +631,28 @@ legend {
     gap: 0;
   }
 }
+
+#pairing {
+  text-align: center;
+  padding: 56px 20px;
+}
+#pairing h1 {
+  font-size: 25px;
+  margin: 0 0 12px;
+}
+#pairing p {
+  color: var(--muted, #687588);
+}
+#pairingQr {
+  display: block;
+  margin: 28px auto 16px;
+  border-radius: 16px;
+}
+#pairingQr[hidden] {
+  display: none;
+}
+.paired-notice {
+  color: #07854b;
+  margin: 0 0 20px;
+  font-weight: 600;
+}
