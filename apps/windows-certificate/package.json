@@ -1,6 +1,6 @@
 {
   "name": "howmuch-certificate",
-  "version": "0.1.7-rc.1",
+  "version": "0.1.7",
   "private": true,
   "description": "얼마 인증서 가져오기",
   "main": "src/main.cjs",
