@@ -71,3 +71,5 @@ DMG를 열면 브랜드와 설치 안내, 앱 아이콘, 화살표, Applications
 - 검증: Node/실제 Electron smoke, Gradle clean build(별도 PostgreSQL), Release의 native Windows·ARM·Intel 검증, 6개 Assets/각 SHA-256 확인.
 - 환경별 API는 기존 GitHub Environment 사용. 앱 ID 분리는 이번 변경 범위에 포함하지 않는다.
 - 최신 QR 흐름의 Backend V50/#517 및 모바일 QR v2 연동 선행 배포 조건은 Release 안내에 유지한다.
+
+게시 전 통합 검증: Node 40개, 실제 Electron 초기 QR/만료/금융사 인증/최종 승인/암호 오류 smoke, 별도 PostgreSQL(test profile)의 Gradle clean build 25개 테스트 통과. rc 버전 변경 후 Node 40개 재검증 통과.
