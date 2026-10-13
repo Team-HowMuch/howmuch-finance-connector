@@ -6,6 +6,7 @@ contextBridge.exposeInMainWorld(
     close: () => ipcRenderer.invoke("certificate:close"),
     pair: () => ipcRenderer.invoke("certificate:pair"),
     pairStatus: () => ipcRenderer.invoke("certificate:pair-status"),
+    appVersion: () => ipcRenderer.invoke("certificate:app-version"),
     init: () => ipcRenderer.invoke("certificate:init"),
     discover: (source) => ipcRenderer.invoke("certificate:discover", source),
     storage: () => ipcRenderer.invoke("certificate:storage"),

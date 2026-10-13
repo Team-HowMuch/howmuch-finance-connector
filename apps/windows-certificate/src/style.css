@@ -85,6 +85,16 @@ select:focus-visible {
   gap: 10px;
   border-bottom: 1px solid var(--gray-10);
 }
+.client-version {
+  margin-left: auto;
+  color: var(--gray-60);
+  font-size: 12px;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.client-version:not([hidden]) + .app-close {
+  margin-left: 0;
+}
 .app-close {
   -webkit-app-region: no-drag;
   margin-left: auto;

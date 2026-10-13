@@ -104,11 +104,21 @@ HOWMUCH_CERTIFICATE_API_ORIGIN=https://dev.howmuch.wars.p-e.kr npm run dist:mac
 
 `dist/얼마-인증서-가져오기-<version>-arm64.dmg`와 `...-x64.dmg`가 생성됩니다. Apple Silicon(M1 이상)은 arm64, Intel Mac은 x64를 선택합니다. `mac.identity: "-"`로 앱과 내부 실행 파일에 ad-hoc 서명을 적용합니다. hardened runtime, sandbox와 ASAR 보안 fuse를 유지합니다. Apple 공증은 수행하지 않습니다.
 
+DMG 설치 화면은 얼마의 파란색, 짧은 설치 안내와 앱 → Applications 화살표를 사용합니다. 아이콘은 실제 Finder 항목이며 앱을 오른쪽 폴더로 드래그합니다. `installer/dmg-background.png`(720×460)와 `installer/dmg-background@2x.png`(1440×920)를 빌드에 사용합니다. 배경만 바꿀 때는 macOS에서 다음을 실행하고 두 배경 PNG와 `src/assets/icon-mac.png`를 함께 반영합니다. macOS 설치 아이콘과 Dock은 이 투명 여백·둥근 모서리의 전용 아이콘을 공유하며, Windows는 기존 아이콘을 유지합니다. CI는 커밋된 이미지를 사용하므로 Swift나 폰트 설치가 필요하지 않습니다.
+
+```sh
+swift scripts/render-dmg.swift --preview
+```
+
+`dist/dmg-preview.png`는 배경에 아이콘을 합성한 디자인 미리보기이며 Finder 스크린샷은 아닙니다. 실제 배치는 `package.json`의 `build.dmg.contents`에서 관리합니다. 레이아웃 크기와 아이콘 좌표를 바꾸면 생성 스크립트도 맞춥니다. 디스크 이름은 `HowMuch Certificate <version>`을 사용합니다. dmgbuild/mac_alias의 한글 NFD/NFC 경로 불일치로 호스트 APFS file ID가 배경 alias에 들어가는 것을 방지하기 위한 선택이며, 앱 표시 이름은 한글을 유지합니다. 첫 배포 전에는 native Intel DMG 생성도 확인합니다.
+
 DMG를 열고 앱을 Applications로 드래그한 뒤 실행합니다. 개발자 확인 경고가 나오면, 직접 받은 신뢰 가능한 파일인지 확인한 뒤 **시스템 설정 → 개인정보 보호 및 보안 → 확인 없이 열기**를 사용합니다. ad-hoc 서명은 Developer ID나 Apple 공증을 대신하지 않으며 Gatekeeper의 자동 허용을 보장하지 않습니다. [Apple 실행 안내](https://support.apple.com/en-us/102445)를 참고합니다. 코드/리소스가 손상되었다는 오류는 단순 승인 대상으로 처리하지 말고 설치 파일과 checksum을 다시 확인합니다.
 
 PR에서는 Mac 두 CPU의 native runner에서 Electron 및 패키징 실행을 검증합니다. Release에서는 두 DMG의 ad-hoc 서명·API origin·초기 실행을 검증하고, Windows까지 모두 성공한 뒤 한 게시 job에서 설치 파일을 첨부합니다. Apple Silicon 로컬 검증은 Intel의 native 실행 및 인터넷 다운로드 후 Gatekeeper 동작을 대신하지 않습니다.
 
 ## 사용 방법
+
+앱 상단 오른쪽의 `Client ver.`에서 설치한 앱 버전을 확인할 수 있습니다. 패키지 버전을 자동으로 읽으며 `0.1.9-rc.1` 같은 프리릴리스 표기도 그대로 표시합니다. 서버 연결 상태와 무관하게 확인할 수 있습니다.
 
 1. 앱을 실행하고 첫 화면의 QR을 로그인한 얼마 모바일 앱에서 스캔합니다. 첫 QR은 PC·모바일 연결이며 금융사 연결 승인은 아닙니다.
 2. 모바일에는 연결 완료 후 PC 인증 대기를 표시합니다. PC에 인증서 선택 화면이 열리면 PC·USB 인증서를 선택하고 금융사·인증서 비밀번호를 입력합니다. 필요한 계좌번호·계좌 비밀번호·생년월일도 입력합니다.

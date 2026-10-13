@@ -1,5 +1,10 @@
 "use strict";
 const $ = (id) => document.getElementById(id);
+// Local app metadata remains available even when the API is unreachable.
+window.certificate.appVersion().then((version) => {
+  $("clientVersion").textContent = `Client ver. ${version}`;
+  $("clientVersion").hidden = false;
+}).catch(() => {});
 $("appClose").addEventListener("click", () => {
   window.certificate?.close().catch(() => {});
 });
