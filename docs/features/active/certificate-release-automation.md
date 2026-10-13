@@ -143,3 +143,9 @@ GitHub Runner의 CPU 변경에 영향을 받지 않도록 [공식 runner 목록]
 - 테스트 파일/USB fixture 생성과 HTTP bind를 동기적으로 먼저 수행하고, 첫 await 전에 실제 앱을 import해 Electron privileged scheme 등록의 before-ready 계약도 유지하도록 수정했다. 제품 앱 동작은 변경하지 않았다.
 - 기존 태그를 이동하지 않고 `0.1.6-rc.2` 새 버전/태그로 재게시한다. 설치 파일이 없는 rc.1은 실패 이력을 남기고 rc.2를 안내한다.
 - 원격 Connector CI `38367456226` 성공, 로컬 Gradle 총 25개 및 Node 35개 통과.
+
+### Intel DMG background alias 오류와 rc.3
+
+rc.2는 PR의 모든 native 검증과 Release의 Windows/arm64 설치본을 통과했지만 Intel DMG 생성에서 `dmgbuild/core.py`의 `backgroundImageAlias → mac_alias → struct.pack(">I")`가 32비트 범위를 넘는 file ID로 실패했다. 앱 서명/실행 오류가 아니며 실패 로그는 run `38368024014`에 보존한다.
+
+설치된 dmg-builder 26.15.3 경로를 확인하고 `build.dmg.backgroundColor: "#ffffff"`를 지정한다. 이 옵션은 배경 이미지 alias 생성을 사용하지 않으며 app/Applications 드래그 설치 경계는 유지한다. 실제 DmgTarget 옵션 생성 테스트로 background 파일이 없고 Applications link가 유지됨을 확인한다. 태그를 이동하지 않고 `0.1.6-rc.3`으로 다시 게시한다.

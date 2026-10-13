@@ -1,6 +1,6 @@
 {
   "name": "howmuch-certificate",
-  "version": "0.1.6-rc.2",
+  "version": "0.1.6-rc.3",
   "private": true,
   "description": "얼마 인증서 가져오기",
   "main": "src/main.cjs",
@@ -60,6 +60,9 @@
       "enableNodeCliInspectArguments": false,
       "enableEmbeddedAsarIntegrityValidation": true,
       "onlyLoadAppFromAsar": true
+    },
+    "dmg": {
+      "backgroundColor": "#ffffff"
     }
   },
   "author": "Team-HowMuch"

@@ -159,3 +159,19 @@ test("Mac release configuration uses explicit ad-hoc signing without disabling r
   assert.equal(build.electronFuses.onlyLoadAppFromAsar, true);
   assert.equal(build.electronFuses.enableEmbeddedAsarIntegrityValidation, true);
 });
+
+
+test("DMG uses a solid background without creating a background-image Finder alias", async () => {
+  const { DmgTarget } = require("dmg-builder");
+  const { build } = require("../package.json");
+  const packager = {
+    config: { dmg: build.dmg },
+    appInfo: { productFilename: "Synthetic Certificate" },
+    getIconPath: async () => null,
+  };
+  const target = new DmgTarget(packager, "dist");
+  const options = await target.computeDmgOptions("/synthetic/Certificate.app");
+  assert.equal(options.backgroundColor, "#ffffff");
+  assert.equal(options.background, undefined);
+  assert.ok(options.contents.some((item) => item.type === "link" && item.path === "/Applications"));
+});
