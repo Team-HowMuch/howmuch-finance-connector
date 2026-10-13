@@ -1,6 +1,6 @@
 # Feature Plan: 앱 실행 초기 QR 연결
 
-- Status: 구현·검증 완료 / 릴리스 CI 게시 진행 중
+- Status: 구현·검증·환경별 설치 파일 게시 완료
 - Issue: #31 / Team-HowMuch/howmuch-backend-v2#517
 
 ## 목표·계약
