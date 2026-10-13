@@ -136,3 +136,10 @@ GitHub Runner의 CPU 변경에 영향을 받지 않도록 [공식 runner 목록]
 - Node 35개 테스트와 actionlint 재검증 통과.
 - `./gradlew clean build --no-daemon` 통과: 25 tests, failures/errors/skipped 0. 별도 PostgreSQL 컨테이너(35432)와 test profile을 사용했다. 기존 25432/15432 컨테이너는 변경하지 않았다.
 - 원격 Actions 결과와 Assets 3개 + SHA-256 3개를 확인한 뒤 기록한다.
+
+### 첫 원격 실행과 rc.2 수정
+
+- `certificate-v0.1.6-rc.1`의 Release run `38367486066`에서 Windows 테스트/패키징 실행은 통과했지만 Mac arm64 smoke가 실패했다. `certificate:init`이 합성 API listen 이전에 실행되는 초기화 경쟁을 로그로 확인했다. 같은 commit의 PR arm64 smoke는 통과해 타이밍 의존임을 확인했다.
+- 테스트 파일/USB fixture 생성과 HTTP bind를 동기적으로 먼저 수행하고, 첫 await 전에 실제 앱을 import해 Electron privileged scheme 등록의 before-ready 계약도 유지하도록 수정했다. 제품 앱 동작은 변경하지 않았다.
+- 기존 태그를 이동하지 않고 `0.1.6-rc.2` 새 버전/태그로 재게시한다. 설치 파일이 없는 rc.1은 실패 이력을 남기고 rc.2를 안내한다.
+- 원격 Connector CI `38367456226` 성공, 로컬 Gradle 총 25개 및 Node 35개 통과.
