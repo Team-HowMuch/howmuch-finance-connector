@@ -156,7 +156,7 @@ app.whenReady().then(async () => {
   } catch {
     /* init returns a sanitized configuration error */
   }
-  const icon = path.join(__dirname, "assets", "icon.png");
+  const icon = path.join(__dirname, "assets", process.platform === "darwin" ? "icon-mac.png" : "icon.png");
   if (process.platform === "darwin") app.dock.setIcon(icon);
   Menu.setApplicationMenu(null);
   window = new BrowserWindow({
