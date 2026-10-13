@@ -1,6 +1,6 @@
 # Feature Plan: 인증서 앱 DMG 설치 화면
 
-- Status: Implemented — 로컬 검증 완료, native Intel 배포 검증 대기
+- Status: Completed — dev/prod Release 게시 및 native 검증 완료
 - Last updated: 2026-10-13
 - Related issue / ADR: 없음 (로컬 디자인 작업, 게시 요청 없음)
 
@@ -75,3 +75,15 @@ DMG를 열면 브랜드와 설치 안내, 앱 아이콘, 화살표, Applications
 게시 전 통합 검증: Node 40개, 실제 Electron 초기 QR/만료/금융사 인증/최종 승인/암호 오류 smoke, 별도 PostgreSQL(test profile)의 Gradle clean build 21개 테스트 통과. rc 버전 변경 후 Node 40개 재검증 통과.
 
 정식 버전 0.1.9로 package/lock 변경 후 Node 40개 통과. JUnit XML 합계로 Gradle 테스트 수 21개(실패/오류/skip 0)를 확인해 이전 기록의 25개 오기를 정정했다.
+
+## 14. 게시 완료
+- dev: https://github.com/Team-HowMuch/howmuch-finance-connector/releases/tag/certificate-v0.1.9-rc.1
+  - Source: `4d7519652510e3141880cc83e7bac4bdb3099172`
+  - Release run `38410233828`: 전체 8 jobs 성공.
+- prod (Latest): https://github.com/Team-HowMuch/howmuch-finance-connector/releases/tag/certificate-v0.1.9
+  - Source: `12677de23fb7dea7481c92095754d85ea5b50efa`
+  - Release run `38410284635`: 전체 8 jobs 성공.
+- 두 실행의 Windows, native Mac ARM/Intel 앱 실행·패키지 서명·환경별 API 설정·DMG 생성·자동 게시 검증 성공. 과거 Intel 배경 alias 오류는 이번 ASCII volume title 설정으로 재발하지 않았다.
+- 각 Release의 설치 파일 3개 + SHA-256 3개 업로드 확인. 총 6개 바이너리의 GitHub SHA-256 digest와 다운로드한 checksum 텍스트의 hash/파일명이 모두 일치한다. 태그 source SHA와 CI head SHA 일치 확인. 이미 공개된 태그 및 이전 설치 파일은 교체하지 않았다.
+- 새 버전은 기존 0.1.8 초기 QR 기능을 포함한다. Backend/Mobile 선행 배포와 dev/prod 동일 앱 ID의 동시 설치 제한은 Release notes에 명시했다. 이 작업에서 서버를 배포하거나 PR을 머지하지 않았다.
+- Gatekeeper 인터넷 다운로드 후 수동 실행 및 실제 금융사 연결은 이번 릴리스 작업에서 검증하지 않았다.
