@@ -21,7 +21,7 @@ async function run() {
   await fs.access(executable);
   child = spawn(
     executable,
-    ["--remote-debugging-address=127.0.0.1", "--remote-debugging-port=0"],
+    ["--disable-gpu", "--remote-debugging-address=127.0.0.1", "--remote-debugging-port=0"],
     { stdio: ["ignore", "pipe", "pipe"] },
   );
   let output = "";
@@ -80,6 +80,9 @@ async function run() {
         brand: document.querySelector('.brand')?.textContent,
         heading: document.querySelector('h1')?.textContent,
         form: Boolean(document.getElementById('registration')),
+        formLocked: document.getElementById('registration')?.hidden,
+        pairingVisible: !document.getElementById('pairing')?.hidden,
+        pairingBridge: typeof window.certificate?.pair,
         bridge: typeof window.certificate,
         discovery: typeof window.certificate?.discover,
         rawPicker: typeof window.certificate?.choose,
@@ -111,7 +114,10 @@ async function run() {
   assert.equal(state?.url, "howmuch-cert://app/index.html");
   assert.equal(state?.title, "인증서 가져오기");
   assert.equal(state?.brand, "인증서 가져오기");
-  assert.equal(state?.heading, "인증서 가져오기");
+  assert.equal(state?.heading, "휴대폰을 먼저 연결해 주세요");
+  assert.equal(state?.formLocked, true);
+  assert.equal(state?.pairingVisible, true);
+  assert.equal(state?.pairingBridge, "function");
   assert.equal(state?.form, true);
   assert.equal(state?.bridge, "object");
   assert.equal(state?.discovery, "function");
