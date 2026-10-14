@@ -52,3 +52,9 @@
 - Windows는 교차 빌드만 완료했으며 실제 Windows 실행 검증은 하지 않았다.
 - 설치 파일별 SHA-256을 생성했다. manual HTML/프록시/jsQR은 개발용이며 installer에는 포함하지 않는다.
 - 저장소 전체 Java 빌드 첫 실행은 테스트 DB 25432 미기동으로 21개 중 1개 실패했다. 전용 테스트 DB 기동 후 재검증 중이다.
+
+## 최종 게시 검증
+- 테스트 전용 DB 준비 후 `./gradlew clean build --no-daemon` 전체 통과. 임시 테스트 DB 컨테이너는 제거했다.
+- Windows x64 전용 NSIS 재빌드 완료. Mac arm64/x64 설치본과 함께 로컬 프리릴리즈로 게시한다.
+- PR #40의 GitHub Actions는 account payment/spending limit으로 runner 시작 전에 차단됐다. 로컬 검증 결과와 구분한다.
+- develop/main 머지는 이 PR의 검토 대상으로 남긴다. 실제 Windows 실행 검증은 미수행이다.
