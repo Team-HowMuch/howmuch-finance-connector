@@ -112,13 +112,21 @@ class CertificateClient {
       ].includes(p.status)
     )
       throw new Error("INVALID_RESPONSE");
+    if (p.status === "PAIRED" && !/^[0-9]{4}$/.test(p.organization || ""))
+      throw new Error("CERTIFICATE_BANK_SELECTION_REQUIRED");
+    if (p.organization != null) {
+      if (!/^[0-9]{4}$/.test(p.organization) ||
+          (this.#pairing.organization && this.#pairing.organization !== p.organization))
+        throw new Error("INVALID_RESPONSE");
+      this.#pairing.organization = p.organization;
+    }
     this.#pairing.status = p.status;
-    return { status: p.status, expiresAt: p.expiresAt };
+    return { status: p.status, expiresAt: p.expiresAt, organization: this.#pairing.organization };
   }
   async create(organization) {
     if (this.#session) throw new Error("SESSION_EXISTS");
     if (!/^[0-9]{4}$/.test(organization)) throw new Error("INVALID_INPUT");
-    if (this.#pairing && !["PAIRED", "FAILED"].includes(this.#pairing.status))
+    if (this.#pairing && (this.#pairing.organization !== organization || !["PAIRED", "FAILED"].includes(this.#pairing.status)))
       throw new Error("CERTIFICATE_CONFLICT");
     const s = this.#pairing
       ? await this.#request(
