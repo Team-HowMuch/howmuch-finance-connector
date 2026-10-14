@@ -1,0 +1,427 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="referrer" content="no-referrer" />
+    <title>인증서 QR 연결 API 테스트</title>
+    <link rel="stylesheet" href="../src/style.css" />
+    <style>
+      body { min-width: 360px; height: 100vh; overflow: auto; background: var(--gray-0); }
+      .app-header { position: sticky; top: 0; z-index: 2; background: white; }
+      main { width: min(100% - 32px, 720px); min-height: calc(100vh - var(--titlebar-height)); margin: 0 auto; padding: 32px 0 64px; }
+      h1 { margin-bottom: 8px; }
+      .intro { margin: 0 0 24px; color: var(--gray-60); line-height: 1.55; }
+      .test-card { padding: 24px; border: 1px solid var(--gray-10); border-radius: 16px; background: white; }
+      .field { margin-bottom: 16px; }
+      .field input, .field textarea { font-size: 15px; }
+      textarea { width: 100%; min-height: 110px; resize: vertical; border: 1px solid var(--gray-20); border-radius: 10px; padding: 12px; color: var(--gray-80); background: white; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; }
+      .actions { display: flex; flex-wrap: wrap; gap: 10px; margin: 16px 0; }
+      .secondary { min-height: 44px; padding: 0 16px; }
+      .primary { min-height: 48px; }
+      .camera { display: block; width: min(100%, 420px); margin: 16px auto; border-radius: 12px; background: #111; }
+      .readout { min-height: 48px; margin: 16px 0; padding: 12px 14px; border-radius: 10px; color: var(--gray-60); background: var(--gray-0); line-height: 1.5; }
+      .readout[data-tone="success"] { color: #087443; background: #ecfdf3; }
+      .readout[data-tone="error"] { color: var(--error-70); background: var(--error-10); }
+      .result { margin-top: 16px; padding: 16px; border: 1px solid var(--gray-10); border-radius: 12px; background: #fff; }
+      .result h2 { margin-bottom: 12px; font-size: 17px; }
+      .result dl { display: grid; grid-template-columns: 130px minmax(0, 1fr); gap: 8px 12px; margin: 0; font-size: 14px; }
+      .result dt { color: var(--gray-60); }
+      .result dd { margin: 0; overflow-wrap: anywhere; }
+      .security-note { margin: 16px 0 0; color: var(--gray-60); font-size: 12px; line-height: 1.55; }
+      .hidden { display: none !important; }
+      @media (max-width: 520px) {
+        main { width: min(100% - 24px, 720px); padding-top: 20px; }
+        .test-card { padding: 18px; }
+        .result dl { grid-template-columns: 1fr; gap: 3px; }
+        .result dd { margin-bottom: 8px; }
+      }
+    </style>
+  </head>
+  <body>
+    <header class="app-header">
+      <img class="brand-icon" draggable="false" src="../src/assets/logo.png" width="34" height="34" alt="" />
+      <span class="brand">인증서 가져오기</span>
+      <span class="client-version">QR API 테스트</span>
+    </header>
+    <main>
+      <h1>휴대폰 연결 테스트</h1>
+      <p class="intro">PC 앱에 표시된 초기 연결 QR을 읽고, 모바일 연결 API에 실제 요청을 보냅니다. 로컬 CODEF mock으로 인증, 최종 동의, 계좌 조회까지 테스트합니다. 실제 은행 정보는 입력하지 마세요.</p>
+      <section class="test-card" aria-label="QR 연결 API 테스트">
+        <h2 style="margin-bottom:12px;font-size:18px">1. 로컬 로그인</h2>
+        <form id="loginForm" autocomplete="off">
+          <label class="field" for="phoneNumber">
+            <span>휴대폰 번호</span>
+            <input id="phoneNumber" type="tel" inputmode="tel" autocomplete="username" placeholder="01012345678" required />
+          </label>
+          <label class="field" for="pin">
+            <span>PIN 6자리</span>
+            <input id="pin" type="password" inputmode="numeric" maxlength="6" autocomplete="current-password" placeholder="PIN 입력" required />
+          </label>
+          <div class="actions">
+            <button id="fillDemo" class="secondary" type="button">테스트 계정 채우기</button>
+            <button id="login" class="primary" type="submit">로그인</button>
+            <button id="clearLogin" class="secondary" type="button" disabled>로그인 정보 지우기</button>
+          </div>
+        </form>
+        <p id="loginStatus" class="readout" role="status" aria-live="polite">로그인 정보는 로컬 개발 API에만 전송됩니다.</p>
+        <p class="security-note" style="margin:0 0 20px">API 주소: <code>http://127.0.0.1:18081</code> · 테스트 계정: 01000000001 / PIN 123456 · <a href="http://127.0.0.1:18080" target="_blank" rel="noreferrer">CODEF mock 관리</a></p>
+        <h2 style="margin:20px 0 12px;font-size:18px">2. PC 앱 QR 연결</h2>
+        <div class="actions">
+          <button id="startCamera" class="secondary" type="button">카메라로 QR 읽기</button>
+          <label class="secondary" for="qrImage" style="display:grid;place-items:center">QR 이미지 선택</label>
+          <input id="qrImage" class="hidden" type="file" accept="image/*" />
+        </div>
+        <video id="camera" class="camera hidden" playsinline muted></video>
+        <label class="field" for="qrPayload">
+          <span>QR 내용 (카메라가 안 되면 JSON 붙여넣기)</span>
+          <textarea id="qrPayload" autocomplete="off" spellcheck="false" placeholder='{"v":2,"type":"HOWMUCH_CERTIFICATE_PAIRING","pairingId":"…","qrToken":"…"}'></textarea>
+        </label>
+        <div class="actions">
+          <button id="parseQr" class="secondary" type="button">QR 확인</button>
+          <button id="claim" class="primary" type="button" disabled>연결 API 호출</button>
+          <button id="refreshStatus" class="secondary" type="button" disabled>연결 상태 다시 확인</button>
+        </div>
+        <p id="status" class="readout" role="status" aria-live="polite">먼저 로그인한 뒤 PC 앱에 표시된 QR을 읽어 주세요.</p>
+        <section id="result" class="result hidden" aria-live="polite">
+          <h2>API 응답 요약</h2>
+          <dl id="resultFields"></dl>
+        </section>
+        <h2 style="margin:28px 0 12px;font-size:18px">3. 인증 확인 및 최종 동의</h2>
+        <p class="intro">QR 연결 후 PC 앱에서 우리은행과 <strong>HowMuch LOCAL MOCK ONLY</strong> 인증서를 선택하세요. 인증서 암호는 <strong>test1234!</strong>, 가상 계좌번호는 <strong>1002123456789</strong>, 계좌 비밀번호는 <strong>1234</strong>입니다. 인증 완료 후 연결 상태를 새로 확인하세요.</p>
+        <div class="actions">
+          <button id="requestApproval" class="secondary" type="button" disabled>승인 요청 · 6자리 확인</button>
+          <button id="approveConnection" class="primary" type="button" disabled>이 금융사로 연결할게요 · YES</button>
+          <button id="rejectConnection" class="secondary" type="button" disabled>연결하지 않을게요 · NO</button>
+          <button id="decisionStatus" class="secondary" type="button" disabled>최종 연결 상태 확인</button>
+          <button id="cancelPairing" class="secondary" type="button" disabled>테스트 연결 취소</button>
+        </div>
+        <p id="approvalCode" class="readout" role="status">금융사 인증 완료 후 승인 요청을 누르면 확인 코드가 나타납니다.</p>
+        <h2 style="margin:28px 0 12px;font-size:18px">4. 연결 목록과 계좌 조회</h2>
+        <div class="actions"><button id="loadConnections" class="secondary" type="button" disabled>연결 목록 조회</button></div>
+        <div id="connections"></div>
+        <pre id="accountResult" style="white-space:pre-wrap;overflow-wrap:anywhere"></pre>
+        <p class="security-note">PIN은 로그인 요청 후 지우고, Access Token과 QR 값은 브라우저 저장소나 로그에 기록하지 않습니다. 연결 API 요청 시 로컬 API로만 전달합니다. 초기 QR 연결 후 최종 YES를 눌러야 금융사 연결이 사용자에게 저장됩니다. CODEF mock은 실제 인증서 암호를 검증하지 않습니다.</p>
+      </section>
+    </main>
+    <script src="/test/vendor/jsqr.js"></script>
+    <script>
+      "use strict";
+      const $ = (id) => document.getElementById(id);
+      let accessToken = "";
+      let qrData = null;
+      let cameraStream = null;
+      let detector = null;
+      let cameraLoop = 0;
+      let pairedId = null;
+      let registrationSessionId = null;
+      let approvalClaimId = null;
+
+      function setStatus(text, tone = "") {
+        $("status").textContent = text;
+        $("status").dataset.tone = tone;
+      }
+
+      function parseQr() {
+        try {
+          const value = JSON.parse($("qrPayload").value.trim());
+          if (value.v !== 2 || value.type !== "HOWMUCH_CERTIFICATE_PAIRING") throw new Error();
+          if (!/^[0-9a-f-]{36}$/i.test(value.pairingId || "")) throw new Error();
+          if (!/^[A-Za-z0-9_-]{43}$/.test(value.qrToken || "")) throw new Error();
+          qrData = { pairingId: value.pairingId, qrToken: value.qrToken };
+          $("claim").disabled = !accessToken;
+          setStatus(`QR 확인 완료 · 연결 ID ${value.pairingId.slice(0, 8)}…`, "success");
+          return true;
+        } catch {
+          qrData = null;
+          $("claim").disabled = true;
+          setStatus("앱의 연결 QR이 아니거나 QR 내용이 올바르지 않습니다.", "error");
+          return false;
+        }
+      }
+
+      function stopCamera() {
+        cancelAnimationFrame(cameraLoop);
+        cameraStream?.getTracks().forEach((track) => track.stop());
+        cameraStream = null;
+        $("camera").srcObject = null;
+        $("camera").classList.add("hidden");
+      }
+
+      async function detectQr(source) {
+        if ("BarcodeDetector" in window) {
+          detector ||= new BarcodeDetector({ formats: ["qr_code"] });
+          return (await detector.detect(source))[0]?.rawValue;
+        }
+        const width = source.videoWidth || source.width;
+        const height = source.videoHeight || source.height;
+        if (!width || !height) return null;
+        const scale = Math.min(1, 1600 / Math.max(width, height));
+        const canvas = document.createElement("canvas");
+        canvas.width = Math.round(width * scale); canvas.height = Math.round(height * scale);
+        const context = canvas.getContext("2d", { willReadFrequently: true });
+        context.drawImage(source, 0, 0, canvas.width, canvas.height);
+        const pixels = context.getImageData(0, 0, canvas.width, canvas.height);
+        return jsQR(pixels.data, pixels.width, pixels.height)?.data;
+      }
+      async function readQrFromImage(file) {
+        try {
+          const bitmap = await createImageBitmap(file);
+          let value;
+          try { value = await detectQr(bitmap); } finally { bitmap.close(); }
+          if (!value) throw new Error();
+          $("qrPayload").value = value;
+          parseQr();
+        } catch {
+          setStatus("이미지에서 QR을 읽지 못했습니다. 선명한 QR 이미지를 선택해 주세요.", "error");
+        }
+      }
+
+      async function scanFrame() {
+        if (!cameraStream) return;
+        try {
+          const value = await detectQr($("camera"));
+          if (value) {
+            $("qrPayload").value = value;
+            stopCamera();
+            parseQr();
+            return;
+          }
+        } catch {
+          stopCamera();
+          setStatus("카메라에서 QR을 읽지 못했습니다. QR 내용을 직접 붙여넣어 주세요.", "error");
+          return;
+        }
+        cameraLoop = requestAnimationFrame(scanFrame);
+      }
+
+      async function startCamera() {
+        if (!navigator.mediaDevices?.getUserMedia) {
+          setStatus("이 브라우저에서 카메라 QR 인식을 사용할 수 없습니다. QR JSON 또는 이미지를 사용해 주세요.", "error");
+          return;
+        }
+        try {
+          cameraStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" }, audio: false });
+          $("camera").srcObject = cameraStream;
+          $("camera").classList.remove("hidden");
+          await $("camera").play();
+          setStatus("PC 앱의 QR을 카메라에 비춰 주세요.");
+          scanFrame();
+        } catch {
+          stopCamera();
+          setStatus("카메라를 열지 못했습니다. 브라우저 권한을 확인하거나 QR 내용을 직접 붙여넣어 주세요.", "error");
+        }
+      }
+
+      async function callApi(method, path, body) {
+        if (!accessToken) throw new Error("먼저 로그인해 주세요.");
+        const response = await fetch(path, {
+          method,
+          headers: { Authorization: `Bearer ${accessToken}`, ...(body ? { "Content-Type": "application/json" } : {}) },
+          body: body ? JSON.stringify(body) : undefined,
+          cache: "no-store",
+          credentials: "omit",
+          redirect: "error",
+        });
+        let payload;
+        try { payload = await response.json(); } catch { throw new Error(`HTTP ${response.status} · 응답 형식 오류`); }
+        if (!response.ok || !payload.success) {
+          const code = payload.error?.code;
+          throw new Error(`HTTP ${response.status}${typeof code === "string" && /^[A-Z0-9_-]{1,80}$/.test(code) ? ` · ${code}` : ""}`);
+        }
+        return { httpStatus: response.status, data: payload.data };
+      }
+
+      function showSummary(data, httpStatus) {
+        if (data.sessionId) registrationSessionId = data.sessionId;
+        if (data.claimId) approvalClaimId = data.claimId;
+        $("requestApproval").disabled = !accessToken || !pairedId || data.status !== "READY_FOR_CLAIM";
+        $("cancelPairing").disabled = !accessToken || !pairedId;
+
+        const fields = [
+          ["HTTP 상태", String(httpStatus)],
+          ["연결 상태", data.status],
+          ["금융사 연결 ID", data.connectionId],
+          ["연결 ID", data.id],
+          ["인증 세션", data.sessionId],
+          ["금융사 코드", data.organization],
+          ["승인 요청 ID", data.claimId],
+          ["만료 시각", data.expiresAt],
+          ["실패 코드", data.failureCode],
+        ].filter(([, value]) => value !== null && value !== undefined && value !== "");
+        const list = $("resultFields");
+        list.replaceChildren();
+        for (const [label, value] of fields) {
+          const dt = document.createElement("dt");
+          const dd = document.createElement("dd");
+          dt.textContent = label;
+          dd.textContent = String(value);
+          list.append(dt, dd);
+        }
+        $("result").classList.remove("hidden");
+      }
+
+      $("loginForm").addEventListener("submit", async (event) => {
+        event.preventDefault();
+        $("login").disabled = true;
+        $("loginStatus").textContent = "로컬 개발 API에 로그인 중입니다…";
+        $("loginStatus").dataset.tone = "";
+        try {
+          const response = await fetch("/api/v2/auth/login", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ phoneNumber: $("phoneNumber").value.trim(), pin: $("pin").value }),
+            cache: "no-store",
+            credentials: "omit",
+            redirect: "error",
+          });
+          let payload;
+          try { payload = await response.json(); } catch { throw new Error(`HTTP ${response.status} · 응답 형식 오류`); }
+          if (!response.ok || !payload.success || typeof payload.data?.accessToken !== "string") {
+            const code = payload.error?.code;
+            throw new Error(`HTTP ${response.status}${typeof code === "string" && /^[A-Z0-9_-]{1,80}$/.test(code) ? ` · ${code}` : ""}`);
+          }
+          accessToken = payload.data.accessToken;
+          $("phoneNumber").value = "";
+          $("pin").value = "";
+          $("clearLogin").disabled = false;
+          $("loginStatus").textContent = "로그인 성공 · Access Token은 이 페이지 메모리에만 유지됩니다.";
+          $("loginStatus").dataset.tone = "success";
+          $("claim").disabled = !qrData;
+          $("loadConnections").disabled = false;
+        } catch (error) {
+          accessToken = "";
+          $("claim").disabled = true;
+          $("clearLogin").disabled = true;
+          $("loginStatus").textContent = error.message || "로그인에 실패했습니다.";
+          $("loginStatus").dataset.tone = "error";
+        } finally {
+          $("pin").value = "";
+          $("login").disabled = false;
+        }
+      });
+      $("clearLogin").addEventListener("click", () => {
+        accessToken = "";
+        pairedId = null;
+        registrationSessionId = null;
+        approvalClaimId = null;
+        for (const id of ["requestApproval", "approveConnection", "rejectConnection", "decisionStatus", "cancelPairing", "loadConnections"]) $(id).disabled = true;
+        $("connections").replaceChildren();
+        $("accountResult").textContent = "";
+        $("approvalCode").textContent = "금융사 인증 완료 후 승인 요청을 누르면 확인 코드가 나타납니다.";
+        $("claim").disabled = true;
+        $("refreshStatus").disabled = true;
+        $("clearLogin").disabled = true;
+        $("result").classList.add("hidden");
+        $("loginStatus").textContent = "로그인 정보와 메모리의 Access Token을 지웠습니다.";
+        $("loginStatus").dataset.tone = "";
+      });
+      $("parseQr").addEventListener("click", parseQr);
+      $("qrPayload").addEventListener("input", () => { qrData = null; $("claim").disabled = true; });
+      $("startCamera").addEventListener("click", startCamera);
+      $("qrImage").addEventListener("change", (event) => { if (event.target.files?.[0]) readQrFromImage(event.target.files[0]); });
+      $("claim").addEventListener("click", async () => {
+        if (!qrData || !parseQr()) return;
+        stopCamera();
+        $("claim").disabled = true;
+        setStatus("모바일 연결 API를 호출하고 있습니다…");
+        try {
+          const result = await callApi("POST", `/api/v2/certificate-pairings/${encodeURIComponent(qrData.pairingId)}/claim`, { qrToken: qrData.qrToken });
+          pairedId = qrData.pairingId;
+          showSummary(result.data, result.httpStatus);
+          $("refreshStatus").disabled = false;
+          setStatus("QR 연결 성공. 이제 PC 앱에서 가상 인증서로 금융사 인증을 진행하세요.", "success");
+        } catch (error) {
+          $("claim").disabled = false;
+          setStatus(error.message || "연결 API 요청에 실패했습니다.", "error");
+        }
+      });
+      $("refreshStatus").addEventListener("click", async () => {
+        if (!pairedId) return;
+        $("refreshStatus").disabled = true;
+        setStatus("모바일 연결 상태를 조회하고 있습니다…");
+        try {
+          const result = await callApi("GET", `/api/v2/certificate-pairings/${encodeURIComponent(pairedId)}`);
+          showSummary(result.data, result.httpStatus);
+          setStatus("연결 상태 조회 성공.", "success");
+        } catch (error) {
+          setStatus(error.message || "연결 상태 조회에 실패했습니다.", "error");
+        } finally {
+          $("refreshStatus").disabled = false;
+        }
+      });
+      $("fillDemo").addEventListener("click", () => {
+        $("phoneNumber").value = "01000000001";
+        $("pin").value = "123456";
+      });
+      $("requestApproval").addEventListener("click", async () => {
+        if (!pairedId) return;
+        try {
+          const pairing = await callApi("GET", `/api/v2/certificate-pairings/${pairedId}`);
+          registrationSessionId = pairing.data.sessionId;
+          const result = await callApi("POST", `/api/v2/certificate-pairings/${pairedId}/approval`);
+          approvalClaimId = result.data.claimId;
+          $("approvalCode").textContent = `PC 앱과 확인할 코드: ${result.data.confirmationCode} · 일치하면 YES를 눌러 주세요.`;
+          for (const id of ["approveConnection", "rejectConnection", "decisionStatus"]) $(id).disabled = false;
+          $("requestApproval").disabled = true;
+          setStatus("승인 요청 성공. 아직 금융사 연결을 저장하지 않았습니다.", "success");
+        } catch (error) { setStatus(error.message, "error"); }
+      });
+      async function decide(approved) {
+        if (!registrationSessionId || !approvalClaimId) return;
+        try {
+          const result = await callApi("POST", `/api/v2/certificate-claims/${registrationSessionId}/${approvalClaimId}/decision`, { approved });
+          showSummary(result.data, result.httpStatus);
+          $("approveConnection").disabled = true;
+          $("rejectConnection").disabled = true;
+          $("approvalCode").textContent = approved ? "최종 동의를 전달했습니다. 연결 상태와 계좌를 확인하세요." : "연결을 취소했습니다.";
+          setStatus(`최종 동의 처리: ${result.data.status}`, "success");
+        } catch (error) { setStatus(error.message, "error"); }
+      }
+      $("approveConnection").addEventListener("click", () => decide(true));
+      $("rejectConnection").addEventListener("click", () => decide(false));
+      $("decisionStatus").addEventListener("click", async () => {
+        if (!registrationSessionId || !approvalClaimId) return;
+        try {
+          const result = await callApi("GET", `/api/v2/certificate-claims/${registrationSessionId}/${approvalClaimId}`);
+          showSummary(result.data, result.httpStatus);
+          setStatus(`최종 연결 상태: ${result.data.status}`, "success");
+        } catch (error) { setStatus(error.message, "error"); }
+      });
+      $("cancelPairing").addEventListener("click", async () => {
+        if (!pairedId) return;
+        try {
+          await callApi("DELETE", `/api/v2/certificate-pairings/${pairedId}`);
+          setStatus("모바일 연결을 취소했습니다. PC 앱에서도 취소 상태를 확인하세요.", "success");
+        } catch (error) { setStatus(error.message, "error"); }
+      });
+      $("loadConnections").addEventListener("click", async () => {
+        try {
+          const result = await callApi("GET", "/api/v2/accounts/connections");
+          $("connections").replaceChildren();
+          for (const connection of result.data) {
+            const button = document.createElement("button");
+            button.className = "secondary";
+            button.textContent = `${connection.organization} · 연결 ${connection.connectionId} · 계좌 조회`;
+            button.addEventListener("click", async () => {
+              try {
+                const accounts = await callApi("GET", `/api/v2/accounts/connections/${connection.connectionId}/accounts?organization=${encodeURIComponent(connection.organization)}`);
+                $("accountResult").textContent = JSON.stringify(accounts.data, null, 2);
+                setStatus(`계좌 조회 성공 · ${accounts.data.candidates?.length || 0}개`, "success");
+              } catch (error) { setStatus(error.message, "error"); }
+            });
+            $("connections").append(button);
+          }
+          if (!result.data.length) $("connections").textContent = "아직 연결된 금융사가 없습니다. 최종 YES 후 다시 조회하세요.";
+        } catch (error) { setStatus(error.message, "error"); }
+      });
+      window.addEventListener("pagehide", () => {
+        stopCamera();
+        accessToken = "";
+        $("pin").value = "";
+        $("qrPayload").value = "";
+        qrData = null;
+      });
+    </script>
+  </body>
+</html>

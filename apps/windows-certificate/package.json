@@ -7,6 +7,7 @@
   "scripts": {
     "start": "electron .",
     "test": "node --test test/*.test.cjs",
+    "test:manual": "node test/manual-server.cjs",
     "configure": "node scripts/configure.cjs",
     "dist:win": "electron-builder --win nsis --x64 --publish never",
     "test:smoke": "electron test/smoke.cjs",
@@ -17,7 +18,8 @@
   },
   "devDependencies": {
     "electron": "44.7.0",
-    "electron-builder": "26.15.3"
+    "electron-builder": "26.15.3",
+    "jsqr": "^1.4.0"
   },
   "build": {
     "appId": "team.howmuch.certificate",

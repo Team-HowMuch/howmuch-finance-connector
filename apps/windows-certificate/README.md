@@ -34,6 +34,38 @@ npm start
 
 Backend에는 PostgreSQL·Redis·Kafka, V46/V47/V50 마이그레이션 및 초기 pairing API과 인증서 기능 설정이 필요합니다. 실제 인증서 테스트에는 mock 서버가 아닌 실제 CODEF 구성이 필요합니다. 설치본은 위 환경변수를 무시하고 빌드 시 지정한 HTTPS 주소만 사용합니다.
 
+## 로컬 QR 연결 API 테스트
+
+PC 앱이 만든 초기 연결 QR을 확인하고 모바일 연결 API를 호출하는 테스트 페이지입니다. Backend API를 로컬 `127.0.0.1:18081`로 실행한 뒤 아래 명령으로 페이지를 엽니다.
+
+```sh
+npm run test:manual
+```
+
+브라우저에서 <http://127.0.0.1:18082>에 접속합니다. 같은 PC에서 실행 중인 인증서 앱의 QR은 스크린샷을 찍어 **QR 이미지 선택**으로 읽을 수 있습니다. QR 디코더는 로컬 `jsqr`를 사용하며 외부 CDN으로 전송하지 않습니다.
+
+1. **테스트 계정 채우기 → 로그인**: 로컬에 준비된 가상 계정 `01000000001`, PIN `123456`을 사용합니다. 새 DB에서는 이 계정을 별도로 seed해야 합니다.
+2. PC 앱의 초기 QR을 읽고 **연결 API 호출**을 누릅니다.
+3. PC 앱에서 우리은행을 선택하고 가상 인증서로 인증합니다. 이번 로컬 환경의 인증서 위치는 `~/NPKI/howmuch-local-test/USER/local-demo`, 이름은 `HowMuch LOCAL MOCK ONLY`, 암호는 `test1234!`입니다. 가상 계좌번호 `1002123456789`, 계좌 비밀번호 `1234`, 생년월일 `19990101`을 사용합니다.
+4. 페이지의 **연결 상태 다시 확인**을 눌러 `READY_FOR_CLAIM`인지 확인합니다.
+5. **승인 요청 · 6자리 확인**을 누르고 PC의 코드와 비교한 뒤 **YES** 또는 **NO**를 선택합니다.
+6. YES 후 `BOUND`를 확인하고 **연결 목록 조회 → 계좌 조회**로 가상 계좌를 확인합니다.
+
+CODEF mock 관리 웹은 <http://127.0.0.1:18080>입니다. 인증서 요청은 가상 사용자 `demo-user`의 계좌를 반환합니다. mock은 실제 공동인증서의 유효성이나 비밀번호 일치를 검증하지 않습니다. 실제 인증정보를 입력하지 않습니다.
+
+테스트 서버는 loopback에만 바인딩하고 아래 경로와 메서드만 로컬 API `127.0.0.1:18081`로 전달합니다.
+
+- `POST /api/v2/auth/login`
+- `POST /api/v2/certificate-pairings/{id}/claim`
+- `GET`, `DELETE /api/v2/certificate-pairings/{id}`
+- `POST /api/v2/certificate-pairings/{id}/approval`
+- `GET /api/v2/certificate-claims/{sessionId}/{claimId}`
+- `POST /api/v2/certificate-claims/{sessionId}/{claimId}/decision`
+- `GET /api/v2/accounts/connections`
+- `GET /api/v2/accounts/connections/{connectionId}/accounts?organization=0020`
+
+로그인 응답의 `accessToken`만 메모리에 유지하며 `requestToken`은 페이지에 전달하지 않습니다. PIN, Access Token, QR 값은 저장하거나 로그에 남기지 않습니다. 로그인 실패 또는 성공 시 입력한 PIN을 지웁니다.
+
 ## Windows 설치 파일 빌드
 
 Windows에서 환경변수로 API 주소를 지정해 빌드합니다. `beforePack`이 주소를 검증하고 `release-config.json`에 기록합니다. 첫 실행 시 `npm ci`로 의존성을 설치합니다.
