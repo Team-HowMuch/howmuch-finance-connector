@@ -339,15 +339,17 @@
       $("qrImage").addEventListener("change", (event) => { if (event.target.files?.[0]) readQrFromImage(event.target.files[0]); });
       $("claim").addEventListener("click", async () => {
         if (!qrData || !parseQr()) return;
-        if (!/^[0-9]{4}$/.test($("mobileOrganization").value)) {
+        const organization = $("mobileOrganization").value;
+        if (!/^[0-9]{4}$/.test(organization)) {
           setStatus("연결할 금융기관을 먼저 선택해 주세요.", "error");
           return;
         }
         stopCamera();
         $("claim").disabled = true;
+        $("mobileOrganization").disabled = true;
         setStatus("모바일 연결 API를 호출하고 있습니다…");
         try {
-          const result = await callApi("POST", `/api/v2/certificate-pairings/${encodeURIComponent(qrData.pairingId)}/claim`, { qrToken: qrData.qrToken, organization: $("mobileOrganization").value });
+          const result = await callApi("POST", `/api/v2/certificate-pairings/${encodeURIComponent(qrData.pairingId)}/claim`, { qrToken: qrData.qrToken, organization });
           pairedId = qrData.pairingId;
           $("mobileOrganization").disabled = true;
           showSummary(result.data, result.httpStatus);
@@ -355,6 +357,7 @@
           setStatus("QR 연결 성공. PC 앱에 선택한 금융기관이 고정됩니다. 해당 은행의 인증서를 선택해 인증하세요.", "success");
         } catch (error) {
           $("claim").disabled = false;
+          $("mobileOrganization").disabled = Boolean(pairedId);
           setStatus(error.message || "연결 API 요청에 실패했습니다.", "error");
         }
       });
