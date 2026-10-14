@@ -16,7 +16,20 @@ PC 정상 종료는 진행 중 업로드/탐색 종료 후 취소 요청을 기�
 - PAIRED 이후에도 취소/만료 상태를 감시하며, 오래된 비동기 결과는 화면을 덮어쓰지 않는다.
 - 정상 창 닫기/앱 종료는 진행 중 요청과 취소 응답을 기다린다. 취소 실패 시 창을 유지한다. renderer 비정상 종료에서도 capability를 먼저 지우지 않고 종료 취소를 시도한다.
 - Node 테스트 41개와 실제 Electron smoke에서 실패 복귀/암호 안내/동일 QR 재인증/모바일 취소/닫기 응답 대기를 검증한다. 실제 CODEF와 실제 모바일 lifecycle 테스트는 이번 검증에 포함하지 않는다.
-- backend V51 및 모바일 DELETE API를 먼저 배포해야 한다. 0.1.11-rc.1(dev)과 0.1.11(prod)의 Windows x64, Mac arm64/x64 설치 파일을 로컬 빌드한다.
+- backend V51 및 모바일 DELETE API를 각 서버에 먼저 배포해야 한다. 0.1.11-rc.1(dev)과 0.1.11(prod)의 Windows x64, Mac arm64/x64 설치 파일을 로컬 빌드한다.
 
-## 게시 계획
+## 게시 결과
 관련 이슈 #37. 커밋은 동작 수정, 검증/문서, dev 사전 릴리즈 버전, prod 정식 버전으로 나눈다. 서버 후속 PR은 Team-HowMuch/howmuch-backend-v2#525를 연결한다. GitHub Actions 대신 로컬 빌드/검증 후 release asset을 업로드한다.
+
+
+## 0.1.11 로컬 빌드 및 원격 게시 검증
+- dev: certificate-v0.1.11-rc.1 / https://dev.howmuch.wars.p-e.kr / tag source 9da1a87.
+- prod: certificate-v0.1.11 / https://api.howmuch.wars.p-e.kr / tag source 780f088.
+- 양쪽 Windows x64 NSIS, macOS arm64/x64 DMG와 SHA-256을 로컬에서 빌드했다.
+- 양쪽 Mac codesign --verify --deep --strict, ad-hoc/hardened runtime, ASAR API origin 및 실제 packaged startup smoke 통과. Intel은 Rosetta 실행이며 native Intel 검증은 아니다.
+- hdiutil verify로 각 DMG 체크섬을 검증했다. Windows ASAR 버전/API 주소는 확인했고 실제 Windows 설치·실행은 미검증이다.
+- Node 41개·Electron smoke 통과, runtime npm audit 취약점 0건.
+- 앱 저장소 ./gradlew clean build --no-daemon 통과: 21개 테스트 실패/건너뜀 0건. 첫 실행의 기본 테스트 DB 부재를 전용 PostgreSQL18 컨테이너로 해결하고 재실행했다. 작업용 컨테이너는 제거했다.
+- PR #38 → develop. 이슈 #37. backend PR Team-HowMuch/howmuch-backend-v2#526은 develop에 병합되었다.
+- 앱 PR Actions는 account payments/spending limit으로 runner 시작 전 차단되었다. 로컬 빌드 결과와 CI 성공을 구분한다.
+- 서버 환경의 새 API 배포와 모바일 lifecycle 실제 연동은 릴리즈 설치 파일 게시와 별개이다.
