@@ -118,3 +118,21 @@ test("server response cannot switch pairing identity", async () => {
   await c.startPairing();
   await assert.rejects(c.pairingStatus(), /INVALID_RESPONSE/);
 });
+
+test("only confirmed failures retry within the same mobile pairing", async () => {
+  const f = fixture();
+  await f.client.startPairing();
+  f.setStatus("PAIRED");
+  await f.client.pairingStatus();
+  await f.client.create("0020");
+  assert.throws(() => f.client.prepareRetry(), /CERTIFICATE_CONFLICT/);
+  f.setStatus("UNKNOWN");
+  await f.client.status();
+  assert.throws(() => f.client.prepareRetry(), /CERTIFICATE_CONFLICT/);
+  f.setStatus("FAILED");
+  await f.client.status();
+  f.client.prepareRetry();
+  await f.client.create("0020");
+  assert.equal(f.calls.filter(c => c.url.endsWith("/certificate-pairings")).length, 1);
+  assert.equal(f.calls.filter(c => c.url.endsWith("/registrations")).length, 2);
+});
