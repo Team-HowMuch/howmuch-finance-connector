@@ -234,7 +234,7 @@ app.whenReady().then(async () => {
     "certificate:init",
     trusted(async () => {
       if (!client) throw new Error("CONFIG_REQUIRED");
-      return client.institutions();
+      return client.banks();
     }),
   );
   ipcMain.handle(

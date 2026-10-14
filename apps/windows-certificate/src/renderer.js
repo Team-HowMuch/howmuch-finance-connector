@@ -180,9 +180,7 @@ function requirements() {
   const i = institutions.find(
     (i) => i.organization === $("organization").value,
   );
-  const account = Boolean(
-    i?.registrationAccountRequired || i?.accountListAccountRequired,
-  );
+  const account = i?.authenticationLevel === 3;
   $("accountFields").hidden = !account;
   $("accountNumber").required = $("accountPassword").required = account;
   $("birthField").hidden = !i?.birthDateRequired;
@@ -489,7 +487,7 @@ $("cancel").addEventListener("click", async () => {
 window.certificate
   .init()
   .then((list) => {
-    institutions = list.filter((i) => i.supported);
+    institutions = list;
     for (const i of institutions) {
       const option = document.createElement("option");
       option.value = i.organization;
