@@ -13,7 +13,8 @@ let institutions = [],
   timer,
   claimId,
   qrDeadline,
-  sessionDeadline;
+  sessionDeadline,
+  retryContext;
 let paired = false,
   pairTimer,
   pairEpoch = 0;
@@ -24,6 +25,7 @@ let generation = 0,
   storageRevision,
   retryUsbOnFocus = false;
 function message(text) {
+  $("message").setAttribute("role", "status");
   $("message").textContent = text;
   $("message").hidden = !text;
 }
@@ -76,7 +78,8 @@ async function knownError(error) {
     return null;
   }
 }
-function terminal(session) {
+async function terminal(session) {
+  const terminalEpoch = generation;
   if (session.status === "BOUND") {
     clearTimeout(timer);
     clearQr();
@@ -89,6 +92,37 @@ function terminal(session) {
     $("claimBox").hidden = true;
     $("cancel").textContent = "다시 가져오기";
     $("refreshQr").hidden = true;
+    return true;
+  }
+  if (session.status === "FAILED") {
+    const failureText =
+      session.failureMessage || "인증에 실패했어요. 인증서를 다시 선택해 주세요.";
+    $("authenticationFailureText").textContent = failureText;
+    await new Promise((resolve) => {
+      $("authenticationFailure").addEventListener("close", resolve, {
+        once: true,
+      });
+      $("authenticationFailure").showModal();
+    });
+    if (terminalEpoch !== generation) return true;
+    await window.certificate.retry();
+    if (terminalEpoch !== generation) return true;
+    const retryEpoch = ++generation;
+    clearTimeout(timer);
+    clearQr();
+    clearClaim();
+    clearCredentials();
+    selected = undefined;
+    $("progress").hidden = true;
+    $("registration").hidden = false;
+    $("submit").disabled = true;
+    step(2);
+    await discover(retryContext?.source || "auto");
+    if (retryEpoch !== generation) return true;
+    if (retryContext) $("organization").value = retryContext.organization;
+    requirements();
+    // The failure dialog already showed this error. Keep the retry form clear.
+    message("");
     return true;
   }
   if (!["FAILED", "UNKNOWN", "EXPIRED", "CANCELLED"].includes(session.status))
@@ -109,10 +143,14 @@ function terminal(session) {
   return true;
 }
 function reset() {
+  ++pairEpoch;
+  clearTimeout(pairTimer);
   clearTimeout(timer);
   clearQr();
   clearClaim();
   sessionDeadline = undefined;
+  retryContext = undefined;
+  if ($("authenticationFailure").open) $("authenticationFailure").close();
   selected = undefined;
   $("reject").hidden = false;
   $("cancel").textContent = "취소";
@@ -287,6 +325,11 @@ $("registration").addEventListener("submit", async (event) => {
   event.preventDefault();
   if (!paired) return;
   const epoch = ++generation;
+  const organization = $("organization").value;
+  retryContext = {
+    organization,
+    source: $("usb").getAttribute("aria-pressed") === "true" ? "usb" : "computer",
+  };
   clearTimeout(timer);
   clearQr();
   clearClaim();
@@ -298,7 +341,7 @@ $("registration").addEventListener("submit", async (event) => {
   message("");
   try {
     const submitted = await window.certificate.submit(
-      $("organization").value,
+      organization,
       selected,
       {
         password: $("password").value,
@@ -313,7 +356,7 @@ $("registration").addEventListener("submit", async (event) => {
     );
     if (epoch !== generation) return;
     sessionDeadline = Date.parse(`${submitted.expiresAt}Z`);
-    if (!terminal(submitted)) poll(epoch);
+    if (!(await terminal(submitted))) poll(epoch);
   } catch (error) {
     const text = await knownError(error);
     if (epoch !== generation) return;
@@ -334,7 +377,7 @@ async function poll(epoch = generation) {
     const s = await window.certificate.status();
     if (epoch !== generation) return;
     sessionDeadline = Date.parse(`${s.expiresAt}Z`);
-    if (terminal(s)) return;
+    if (await terminal(s)) return;
     if (Number.isFinite(sessionDeadline) && sessionDeadline <= Date.now()) {
       stopped(
         "연결 시간이 만료됐어요",
@@ -494,6 +537,7 @@ async function pollPairing(epoch, deadline) {
       step(2);
       requirements();
       await discover("auto");
+      pairTimer = setTimeout(() => monitorPairing(epoch), 1500);
       return;
     }
     if (p.status !== "WAITING_FOR_MOBILE" || deadline <= Date.now())
@@ -513,6 +557,32 @@ async function pollPairing(epoch, deadline) {
   }
   if (epoch === pairEpoch)
     pairTimer = setTimeout(() => pollPairing(epoch, deadline), 1500);
+}
+async function monitorPairing(epoch) {
+  if (epoch !== pairEpoch || !paired) return;
+  try {
+    const state = await window.certificate.pairStatus();
+    if (epoch !== pairEpoch || !paired) return;
+    if (["CANCELLED", "EXPIRED"].includes(state.status)) {
+      ++generation;
+      paired = false;
+      if ($("authenticationFailure").open) $("authenticationFailure").close();
+      clearTimeout(timer);
+      clearCredentials();
+      selected = undefined;
+      $("registration").hidden = true;
+      $("pairedNotice").hidden = true;
+      $("progress").hidden = false;
+      stopped(state.status === "CANCELLED" ? "연결이 취소됐어요" : "연결 시간이 만료됐어요",
+        "다시 연결하려면 취소를 눌러 새로운 QR을 받아주세요.");
+      return;
+    }
+    if (state.status === "BOUND") return;
+  } catch {
+    // A network failure is not evidence that the mobile user cancelled.
+  }
+  if (epoch === pairEpoch && paired)
+    pairTimer = setTimeout(() => monitorPairing(epoch), 1500);
 }
 $("retryPairing").addEventListener("click", async () => {
   ++pairEpoch;

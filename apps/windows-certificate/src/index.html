@@ -64,6 +64,9 @@
         <p id="pairedNotice" class="paired-notice" hidden>
           휴대폰이 연결됐어요
         </p>
+        <p id="message" role="status" aria-live="polite">
+          금융사 불러오는 중…
+        </p>
         <form id="registration" hidden autocomplete="off">
           <h1>인증서 가져오기</h1>
           <fieldset class="certificates">
@@ -221,9 +224,21 @@
           </div>
           <button id="cancel" class="text-button" type="button">취소</button>
         </section>
-        <p id="message" role="status" aria-live="polite">금융사 불러오는 중…</p>
       </main>
     </div>
+    <dialog
+      id="authenticationFailure"
+      aria-labelledby="authenticationFailureTitle"
+      aria-describedby="authenticationFailureText"
+    >
+      <h2 id="authenticationFailureTitle">금융사 인증에 실패했어요</h2>
+      <p id="authenticationFailureText"></p>
+      <form method="dialog">
+        <button id="retryAuthentication" class="primary" autofocus>
+          다시 선택
+        </button>
+      </form>
+    </dialog>
     <script src="renderer.js"></script>
   </body>
 </html>

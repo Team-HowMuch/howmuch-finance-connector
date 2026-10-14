@@ -16,7 +16,9 @@ let server,
   status = "CREATED",
   failureCode,
   uploads = 0,
-  creates = 0;
+  creates = 0,
+  mobileCancelled = false,
+  cancelAcknowledged = false;
 const id = "00000000-0000-4000-8000-000000000001",
   pairId = "00000000-0000-4000-8000-000000000002";
 const timeout = setTimeout(() => {
@@ -89,9 +91,14 @@ async function run() {
     }
     if (req.url.endsWith("/pc")) {
       assert.equal(req.headers["x-pc-capability"], "P".repeat(43));
+      if (req.method === "DELETE") {
+        await delay(200);
+        cancelAcknowledged = true;
+        return send(null);
+      }
       return send({
         id: pairId,
-        status: expired ? "EXPIRED" : paired ? "PAIRED" : "WAITING_FOR_MOBILE",
+        status: mobileCancelled ? "CANCELLED" : expired ? "EXPIRED" : paired ? "PAIRED" : "WAITING_FOR_MOBILE",
         expiresAt: expiry(),
       });
     }
@@ -244,6 +251,8 @@ async function run() {
     '!document.getElementById("registration").hidden && document.querySelector("input[name=certificate]")',
     "New import reconnects after completion",
   );
+  await w.webContents.executeJavaScript('document.getElementById("computer").click()');
+  await wait(w, 'document.getElementById("computer").getAttribute("aria-pressed")==="true" && document.getElementById("certificatePanel").getAttribute("aria-busy")==="false" && document.querySelector("input[name=certificate]")', "Keep computer storage when USB is also attached");
   await w.webContents.executeJavaScript(
     `document.getElementById('organization').value='0020';document.getElementById('organization').dispatchEvent(new Event('change'));document.querySelector('input[name=certificate]').click();for(const [id,value] of Object.entries({password:'synthetic-password',accountNumber:'123456',accountPassword:'1234',birthDate:'19900101'})){document.getElementById(id).value=value;document.getElementById(id).dispatchEvent(new Event('input'));}document.getElementById('registration').requestSubmit();`,
   );
@@ -252,20 +261,42 @@ async function run() {
     'document.getElementById("progressTitle").textContent==="금융사 인증 중"',
     "Second import starts auth",
   );
+  const chosenSource = await w.webContents.executeJavaScript('document.getElementById("usb").getAttribute("aria-pressed")');
   status = "FAILED";
   failureCode = "BANK_CERTIFICATE_PASSWORD_INVALID";
+  await wait(w, 'document.getElementById("authenticationFailure")?.open', "Failure requires an explicit acknowledgement");
+  assert.equal(await w.webContents.executeJavaScript('document.getElementById("registration").hidden'), true);
+  assert.equal(await w.webContents.executeJavaScript('document.getElementById("authenticationFailureText").textContent'),
+    require("../src/client.cjs").userErrorMessage(failureCode));
+  await capture(w, "electron-authentication-failure-dialog.png");
+  await w.webContents.executeJavaScript('document.getElementById("retryAuthentication").click()');
   await wait(
     w,
-    'document.getElementById("progressTitle").textContent==="금융사 인증에 실패했어요"',
-    "Provider error must display before any final approval",
+    '!document.getElementById("registration").hidden && document.getElementById("message").hidden',
+    "Failure dialog acknowledgement returns to a clear retry form",
   );
-  assert.equal(
-    await w.webContents.executeJavaScript(
-      'document.getElementById("progressText").textContent',
-    ),
-    require("../src/client.cjs").userErrorMessage(failureCode),
-  );
+  assert.equal(await w.webContents.executeJavaScript('document.getElementById("organization").value'), "0020");
+  assert.equal(await w.webContents.executeJavaScript('document.getElementById("usb").getAttribute("aria-pressed")'), chosenSource);
   await capture(w, "electron-password-error-smoke.png");
+  assert.equal(await w.webContents.executeJavaScript('document.getElementById("password").value'), "");
+  const beforeRetry = creates;
+  await w.webContents.executeJavaScript(
+    `document.getElementById('organization').value='0020';document.getElementById('organization').dispatchEvent(new Event('change'));document.querySelector('input[name=certificate]').click();for(const [id,value] of Object.entries({password:'synthetic-password',accountNumber:'123456',accountPassword:'1234',birthDate:'19900101'})){document.getElementById(id).value=value;document.getElementById(id).dispatchEvent(new Event('input'));}document.getElementById('registration').requestSubmit();`,
+  );
+  await wait(w, 'document.getElementById("progressTitle").textContent==="금융사 인증 중"', "Retry authentication");
+  assert.equal(creates, beforeRetry);
+  const retryDeadline = Date.now() + 5000;
+  while (uploads < 3 && Date.now() < retryDeadline) await delay(25);
+  assert.equal(uploads, 3);
+  mobileCancelled = true;
+  await wait(w, 'document.getElementById("progressTitle").textContent==="연결이 취소됐어요"', "Mobile cancellation reaches PC");
+  app.on("before-quit", event => event.preventDefault());
+  w.close();
+  assert.equal(w.isDestroyed(), false);
+  const deadline = Date.now() + 5000;
+  while (!w.isDestroyed() && Date.now() < deadline) await delay(25);
+  assert.equal(cancelAcknowledged, true);
+  assert.equal(w.isDestroyed(), true);
   console.log(
     "Electron initial pairing / expiry / PC auth / final Yes / password error smoke passed",
   );
