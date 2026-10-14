@@ -45,3 +45,10 @@
 - 커밋 경계: 실패 모달·재선택·스크롤 및 smoke / 로컬 모바일 테스트 HTML·프록시·문서 / 0.1.12-rc.1 버전과 릴리즈 검증 기록.
 - 설치본은 dev HTTPS API를 사용하며 local mock/test HTML은 설치 패키지에 포함하지 않는다.
 - Node 테스트 41개와 실제 Electron smoke 통과. Mac arm64 실제 packaged startup 및 ad-hoc signature 검증 통과.
+
+## 0.1.12-rc.1 로컬 빌드 검증
+- dev API `https://dev.howmuch.wars.p-e.kr`을 포함한 Mac arm64/x64 DMG 및 Windows x64 NSIS 설치본을 로컬에서 빌드했다.
+- Mac arm64/x64에서 ad-hoc signature, hardened runtime, ASAR API 주소, 실제 packaged renderer startup을 검증했다. Intel 첫 실행은 debugger 기동 시간 초과 후 동일 빌드 재시도에서 통과했다.
+- Windows는 교차 빌드만 완료했으며 실제 Windows 실행 검증은 하지 않았다.
+- 설치 파일별 SHA-256을 생성했다. manual HTML/프록시/jsQR은 개발용이며 installer에는 포함하지 않는다.
+- 저장소 전체 Java 빌드 첫 실행은 테스트 DB 25432 미기동으로 21개 중 1개 실패했다. 전용 테스트 DB 기동 후 재검증 중이다.
