@@ -31,7 +31,9 @@ app.enableSandbox();
 let window,
   client,
   busy = false,
-  discovering = false;
+  discovering = false,
+  closing = false,
+  closeReady = false;
 const certificates = new CertificateStore();
 let volumeCache, volumeQuery;
 async function volumes() {
@@ -64,6 +66,7 @@ function trusted(handler) {
 }
 async function discover(source) {
   if (
+    closing ||
     busy ||
     discovering ||
     !["auto", "computer", "usb", "folder"].includes(source)
@@ -193,11 +196,37 @@ app.whenReady().then(async () => {
   );
   window.webContents.on("render-process-gone", () => {
     certificates.clear();
-    client?.clear();
+    window?.close();
+  });
+  window.on("close", (event) => {
+    if (closeReady) return;
+    event.preventDefault();
+    if (closing) return;
+    closing = true;
+    (async () => {
+      try {
+        const deadline = Date.now() + 45_000;
+        while (busy || discovering) {
+          if (Date.now() >= deadline) throw new Error("BUSY");
+          await new Promise((resolve) => setTimeout(resolve, 50));
+        }
+        await client?.cancel();
+        certificates.clear();
+        closeReady = true;
+        window?.close();
+      } catch {
+        closing = false;
+        if (window) await dialog.showMessageBox(window, {
+          type: "error",
+          message: "연결 취소를 확인하지 못했어요",
+          detail: "네트워크와 진행 상태를 확인한 뒤 다시 종료해 주세요.",
+        });
+      }
+    })();
   });
   window.on("closed", () => {
     certificates.clear();
-    client?.cancel().catch(() => {});
+    client?.clear();
     window = undefined;
   });
   ipcMain.handle("certificate:app-version", trusted(async () => app.getVersion()));
@@ -211,19 +240,25 @@ app.whenReady().then(async () => {
   ipcMain.handle(
     "certificate:pair",
     trusted(async () => {
-      const pair = await client.startPairing();
-      return {
-        image: await QRCode.toDataURL(
-          JSON.stringify({
-            v: 2,
-            type: "HOWMUCH_CERTIFICATE_PAIRING",
-            pairingId: pair.pairingId,
-            qrToken: pair.qrToken,
-          }),
-          { width: 256, margin: 2 },
-        ),
-        expiresAt: pair.expiresAt,
-      };
+      if (closing || busy || discovering || !client) throw new Error("BUSY");
+      busy = true;
+      try {
+        const pair = await client.startPairing();
+        return {
+          image: await QRCode.toDataURL(
+            JSON.stringify({
+              v: 2,
+              type: "HOWMUCH_CERTIFICATE_PAIRING",
+              pairingId: pair.pairingId,
+              qrToken: pair.qrToken,
+            }),
+            { width: 256, margin: 2 },
+          ),
+          expiresAt: pair.expiresAt,
+        };
+      } finally {
+        busy = false;
+      }
     }),
   );
   ipcMain.handle(
@@ -250,7 +285,7 @@ app.whenReady().then(async () => {
   ipcMain.handle(
     "certificate:submit",
     trusted(async (organization, certificateId, input) => {
-      if (busy || discovering || !client) throw new Error("INVALID_INPUT");
+      if (closing || busy || discovering || !client) throw new Error("INVALID_INPUT");
       const fields = uploadFields(input);
       busy = true;
       let material;
@@ -296,6 +331,10 @@ app.whenReady().then(async () => {
     "certificate:reject",
     trusted((id) => client.reject(id)),
   );
+  ipcMain.handle("certificate:retry", trusted(() => {
+    if (closing || busy || discovering) throw new Error("BUSY");
+    client.prepareRetry();
+  }));
   ipcMain.handle(
     "certificate:cancel",
     trusted(async () => {
@@ -305,5 +344,11 @@ app.whenReady().then(async () => {
     }),
   );
   await window.loadURL("howmuch-cert://app/index.html");
+});
+app.on("before-quit", (event) => {
+  if (window && !closeReady) {
+    event.preventDefault();
+    window.close();
+  }
 });
 app.on("window-all-closed", () => app.quit());

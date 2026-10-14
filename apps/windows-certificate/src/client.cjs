@@ -107,7 +107,7 @@ class CertificateClient {
   async create(organization) {
     if (this.#session) throw new Error("SESSION_EXISTS");
     if (!/^[0-9]{4}$/.test(organization)) throw new Error("INVALID_INPUT");
-    if (this.#pairing && this.#pairing.status !== "PAIRED")
+    if (this.#pairing && !["PAIRED", "FAILED"].includes(this.#pairing.status))
       throw new Error("CERTIFICATE_CONFLICT");
     const s = this.#pairing
       ? await this.#request(
@@ -184,6 +184,13 @@ class CertificateClient {
   async reject(claimId) {
     if (!/^[0-9a-f-]{36}$/.test(claimId)) throw new Error("INVALID_INPUT");
     return this.#request("DELETE", `/${this.#id()}/claims/${claimId}`);
+  }
+  prepareRetry() {
+    if (!this.#pairing || this.#session?.status !== "FAILED")
+      throw new Error("CERTIFICATE_CONFLICT");
+    // Only a confirmed failure can be detached. The server revalidates it under lock.
+    this.#session = undefined;
+    this.#pairing.status = "FAILED";
   }
   async cancel() {
     try {
