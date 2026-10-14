@@ -251,6 +251,8 @@ async function run() {
     '!document.getElementById("registration").hidden && document.querySelector("input[name=certificate]")',
     "New import reconnects after completion",
   );
+  await w.webContents.executeJavaScript('document.getElementById("computer").click()');
+  await wait(w, 'document.getElementById("computer").getAttribute("aria-pressed")==="true" && document.getElementById("certificatePanel").getAttribute("aria-busy")==="false" && document.querySelector("input[name=certificate]")', "Keep computer storage when USB is also attached");
   await w.webContents.executeJavaScript(
     `document.getElementById('organization').value='0020';document.getElementById('organization').dispatchEvent(new Event('change'));document.querySelector('input[name=certificate]').click();for(const [id,value] of Object.entries({password:'synthetic-password',accountNumber:'123456',accountPassword:'1234',birthDate:'19900101'})){document.getElementById(id).value=value;document.getElementById(id).dispatchEvent(new Event('input'));}document.getElementById('registration').requestSubmit();`,
   );
@@ -259,19 +261,22 @@ async function run() {
     'document.getElementById("progressTitle").textContent==="금융사 인증 중"',
     "Second import starts auth",
   );
+  const chosenSource = await w.webContents.executeJavaScript('document.getElementById("usb").getAttribute("aria-pressed")');
   status = "FAILED";
   failureCode = "BANK_CERTIFICATE_PASSWORD_INVALID";
+  await wait(w, 'document.getElementById("authenticationFailure")?.open', "Failure requires an explicit acknowledgement");
+  assert.equal(await w.webContents.executeJavaScript('document.getElementById("registration").hidden'), true);
+  assert.equal(await w.webContents.executeJavaScript('document.getElementById("authenticationFailureText").textContent'),
+    require("../src/client.cjs").userErrorMessage(failureCode));
+  await capture(w, "electron-authentication-failure-dialog.png");
+  await w.webContents.executeJavaScript('document.getElementById("retryAuthentication").click()');
   await wait(
     w,
-    '!document.getElementById("registration").hidden && document.getElementById("message").textContent.includes("암호")',
-    "Provider error must display before any final approval",
+    '!document.getElementById("registration").hidden && document.getElementById("message").hidden',
+    "Failure dialog acknowledgement returns to a clear retry form",
   );
-  assert.equal(
-    await w.webContents.executeJavaScript(
-      'document.getElementById("message").textContent',
-    ),
-    require("../src/client.cjs").userErrorMessage(failureCode),
-  );
+  assert.equal(await w.webContents.executeJavaScript('document.getElementById("organization").value'), "0020");
+  assert.equal(await w.webContents.executeJavaScript('document.getElementById("usb").getAttribute("aria-pressed")'), chosenSource);
   await capture(w, "electron-password-error-smoke.png");
   assert.equal(await w.webContents.executeJavaScript('document.getElementById("password").value'), "");
   const beforeRetry = creates;
