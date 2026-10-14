@@ -66,7 +66,10 @@
         </form>
         <p id="loginStatus" class="readout" role="status" aria-live="polite">로그인 정보는 로컬 개발 API에만 전송됩니다.</p>
         <p class="security-note" style="margin:0 0 20px">API 주소: <code>http://127.0.0.1:18081</code> · 테스트 계정: 01000000001 / PIN 123456 · <a href="http://127.0.0.1:18080" target="_blank" rel="noreferrer">CODEF mock 관리</a></p>
-        <h2 style="margin:20px 0 12px;font-size:18px">2. PC 앱 QR 연결</h2>
+        <h2 style="margin:20px 0 12px;font-size:18px">2. 금융기관 선택 및 PC 앱 QR 연결</h2>
+        <label class="field" for="mobileOrganization"><span>연결할 금융기관</span>
+          <select id="mobileOrganization" required disabled><option value="">금융기관 목록을 불러오는 중…</option></select>
+        </label>
         <div class="actions">
           <button id="startCamera" class="secondary" type="button">카메라로 QR 읽기</button>
           <label class="secondary" for="qrImage" style="display:grid;place-items:center">QR 이미지 선택</label>
@@ -88,7 +91,7 @@
           <dl id="resultFields"></dl>
         </section>
         <h2 style="margin:28px 0 12px;font-size:18px">3. 인증 확인 및 최종 동의</h2>
-        <p class="intro">QR 연결 후 PC 앱에서 우리은행과 <strong>HowMuch LOCAL MOCK ONLY</strong> 인증서를 선택하세요. 인증서 암호는 <strong>test1234!</strong>, 가상 계좌번호는 <strong>1002123456789</strong>, 계좌 비밀번호는 <strong>1234</strong>입니다. 인증 완료 후 연결 상태를 새로 확인하세요.</p>
+        <p class="intro">금융기관을 선택하고 QR을 연결하면 PC 앱의 은행은 고정됩니다. PC에서 인증서를 선택해 인증하세요. 인증 완료 후 연결 상태를 새로 확인하세요.</p>
         <div class="actions">
           <button id="requestApproval" class="secondary" type="button" disabled>승인 요청 · 6자리 확인</button>
           <button id="approveConnection" class="primary" type="button" disabled>이 금융사로 연결할게요 · YES</button>
@@ -101,7 +104,7 @@
         <div class="actions"><button id="loadConnections" class="secondary" type="button" disabled>연결 목록 조회</button></div>
         <div id="connections"></div>
         <pre id="accountResult" style="white-space:pre-wrap;overflow-wrap:anywhere"></pre>
-        <p class="security-note">PIN은 로그인 요청 후 지우고, Access Token과 QR 값은 브라우저 저장소나 로그에 기록하지 않습니다. 연결 API 요청 시 로컬 API로만 전달합니다. 초기 QR 연결 후 최종 YES를 눌러야 금융사 연결이 사용자에게 저장됩니다. CODEF mock은 실제 인증서 암호를 검증하지 않습니다.</p>
+        <p class="security-note">PIN은 로그인 요청 후 지우고, Access Token과 QR 값은 브라우저 저장소나 로그에 기록하지 않습니다. 연결 API 요청 시 로컬 API로만 전달합니다. 초기 QR 연결 후 최종 YES를 눌러야 금융사 연결이 사용자에게 저장됩니다.</p>
       </section>
     </main>
     <script src="/test/vendor/jsqr.js"></script>
@@ -116,6 +119,19 @@
       let pairedId = null;
       let registrationSessionId = null;
       let approvalClaimId = null;
+
+      fetch("/api/v3/banks", { cache: "no-store" }).then(async response => {
+        const payload = await response.json();
+        if (!response.ok || !payload.success || !Array.isArray(payload.data) || !payload.data.length ||
+            payload.data.some(b => !/^[0-9]{4}$/.test(b.organization) || typeof b.name !== "string"))
+          throw new Error("은행 목록 조회 실패");
+        $("mobileOrganization").replaceChildren(new Option("금융기관을 선택해 주세요", ""));
+        for (const bank of payload.data)
+          $("mobileOrganization").append(new Option(`${bank.name} · 인증 단계 ${bank.authenticationLevel}`, bank.organization));
+        $("mobileOrganization").disabled = Boolean(pairedId);
+      }).catch(() => {
+        $("mobileOrganization").replaceChildren(new Option("금융기관 목록 조회 실패 · 새로고침해 주세요", ""));
+      });
 
       function setStatus(text, tone = "") {
         $("status").textContent = text;
@@ -303,6 +319,7 @@
       $("clearLogin").addEventListener("click", () => {
         accessToken = "";
         pairedId = null;
+        $("mobileOrganization").disabled = $("mobileOrganization").options.length < 2;
         registrationSessionId = null;
         approvalClaimId = null;
         for (const id of ["requestApproval", "approveConnection", "rejectConnection", "decisionStatus", "cancelPairing", "loadConnections"]) $(id).disabled = true;
@@ -322,17 +339,25 @@
       $("qrImage").addEventListener("change", (event) => { if (event.target.files?.[0]) readQrFromImage(event.target.files[0]); });
       $("claim").addEventListener("click", async () => {
         if (!qrData || !parseQr()) return;
+        const organization = $("mobileOrganization").value;
+        if (!/^[0-9]{4}$/.test(organization)) {
+          setStatus("연결할 금융기관을 먼저 선택해 주세요.", "error");
+          return;
+        }
         stopCamera();
         $("claim").disabled = true;
+        $("mobileOrganization").disabled = true;
         setStatus("모바일 연결 API를 호출하고 있습니다…");
         try {
-          const result = await callApi("POST", `/api/v2/certificate-pairings/${encodeURIComponent(qrData.pairingId)}/claim`, { qrToken: qrData.qrToken });
+          const result = await callApi("POST", `/api/v2/certificate-pairings/${encodeURIComponent(qrData.pairingId)}/claim`, { qrToken: qrData.qrToken, organization });
           pairedId = qrData.pairingId;
+          $("mobileOrganization").disabled = true;
           showSummary(result.data, result.httpStatus);
           $("refreshStatus").disabled = false;
-          setStatus("QR 연결 성공. 이제 PC 앱에서 가상 인증서로 금융사 인증을 진행하세요.", "success");
+          setStatus("QR 연결 성공. PC 앱에 선택한 금융기관이 고정됩니다. 해당 은행의 인증서를 선택해 인증하세요.", "success");
         } catch (error) {
           $("claim").disabled = false;
+          $("mobileOrganization").disabled = Boolean(pairedId);
           setStatus(error.message || "연결 API 요청에 실패했습니다.", "error");
         }
       });
@@ -392,6 +417,9 @@
         if (!pairedId) return;
         try {
           await callApi("DELETE", `/api/v2/certificate-pairings/${pairedId}`);
+          pairedId = null;
+          $("mobileOrganization").disabled = false;
+          $("claim").disabled = !accessToken || !qrData;
           setStatus("모바일 연결을 취소했습니다. PC 앱에서도 취소 상태를 확인하세요.", "success");
         } catch (error) { setStatus(error.message, "error"); }
       });

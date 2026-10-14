@@ -87,6 +87,15 @@ async function proxyLogin(req, res) {
 
 async function proxyApi(req, res, pathname, query) {
   if (pathname === "/api/v2/auth/login") return proxyLogin(req, res);
+  if (pathname === "/api/v3/banks" && req.method === "GET") {
+    try {
+      const upstream = await fetch(`${apiOrigin}/api/v3/banks`, { redirect: "error", signal: AbortSignal.timeout(10_000) });
+      const body = await upstream.text();
+      if (body.length > 1_000_000) throw new Error("RESPONSE_TOO_LARGE");
+      res.writeHead(upstream.status, { "Content-Type": "application/json", "Cache-Control": "no-store" });
+      return res.end(body);
+    } catch { return respond(res, 502, { success: false, error: { code: "LOCAL_API_UNAVAILABLE" } }); }
+  }
   const uuid = "[0-9a-f-]{36}";
   const routes = [
     [new RegExp(`^/api/v2/certificate-pairings/${uuid}/claim$`, "i"), ["POST"], "claim"],
@@ -119,9 +128,9 @@ async function proxyApi(req, res, pathname, query) {
     try { body = await readJsonBody(req, 2048); }
     catch (error) { return respond(res, error.status || 400, { success: false, error: { code: "INVALID_REQUEST" } }); }
     if (route[2] === "claim") {
-      if (typeof body?.qrToken !== "string" || !/^[A-Za-z0-9_-]{43}$/.test(body.qrToken))
+      if (typeof body?.qrToken !== "string" || !/^[A-Za-z0-9_-]{43}$/.test(body.qrToken) || !/^[0-9]{4}$/.test(body.organization || ""))
         return respond(res, 400, { success: false, error: { code: "INVALID_REQUEST" } });
-      body = { qrToken: body.qrToken };
+      body = { qrToken: body.qrToken, organization: body.organization };
     } else {
       if (typeof body?.approved !== "boolean")
         return respond(res, 400, { success: false, error: { code: "INVALID_REQUEST" } });

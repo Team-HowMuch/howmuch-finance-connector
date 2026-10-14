@@ -124,7 +124,7 @@ test("oversized response is rejected", async () => {
     "https://api.example.test",
     async () => new Response("x".repeat(1024 * 1024 + 1)),
   );
-  await assert.rejects(client.institutions(), /RESPONSE_TOO_LARGE/);
+  await assert.rejects(client.banks(), /RESPONSE_TOO_LARGE/);
 });
 test("uncertain cancellation keeps the capability available for an explicit retry", async () => {
   for (const failure of ["network", "server"]) {

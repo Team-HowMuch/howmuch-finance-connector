@@ -15,7 +15,7 @@ class CertificateClient {
     this.#origin = apiOrigin(origin, local);
     this.#fetch = fetchImpl;
   }
-  async #request(method, suffix = "", body, upload = false, pairing = false) {
+  async #request(method, suffix = "", body, upload = false, pairing = false, bankCatalog = false) {
     const headers = { "Content-Type": "application/json" };
     const capability = pairing
       ? this.#pairing?.pcCapability
@@ -23,7 +23,7 @@ class CertificateClient {
     if (capability) headers["X-PC-Capability"] = capability;
     if (upload) headers["X-Upload-Capability"] = this.#session.uploadCapability;
     const response = await this.#fetch(
-      `${this.#origin}/api/v2/${pairing ? "certificate-pairings" : "certificate-registrations"}${suffix}`,
+      `${this.#origin}/api/${bankCatalog ? "v3/banks" : pairing ? "v2/certificate-pairings" : "v2/certificate-registrations"}${suffix}`,
       {
         method,
         headers,
@@ -54,9 +54,20 @@ class CertificateClient {
     }
     return parsed.data;
   }
-  async institutions() {
-    const list = await this.#request("GET", "/institutions");
-    if (!Array.isArray(list)) throw new Error("INVALID_RESPONSE");
+  async banks() {
+    const list = await this.#request("GET", "", undefined, false, false, true);
+    if (
+      !Array.isArray(list) ||
+      list.some(
+        (bank) =>
+          !bank ||
+          typeof bank.organization !== "string" ||
+          !/^\d{4}$/.test(bank.organization) ||
+          typeof bank.name !== "string" ||
+          ![1, 2, 3].includes(bank.authenticationLevel),
+      )
+    )
+      throw new Error("INVALID_RESPONSE");
     return list;
   }
   async startPairing() {
@@ -101,13 +112,21 @@ class CertificateClient {
       ].includes(p.status)
     )
       throw new Error("INVALID_RESPONSE");
+    if (p.status === "PAIRED" && !/^[0-9]{4}$/.test(p.organization || ""))
+      throw new Error("CERTIFICATE_BANK_SELECTION_REQUIRED");
+    if (p.organization != null) {
+      if (!/^[0-9]{4}$/.test(p.organization) ||
+          (this.#pairing.organization && this.#pairing.organization !== p.organization))
+        throw new Error("INVALID_RESPONSE");
+      this.#pairing.organization = p.organization;
+    }
     this.#pairing.status = p.status;
-    return { status: p.status, expiresAt: p.expiresAt };
+    return { status: p.status, expiresAt: p.expiresAt, organization: this.#pairing.organization };
   }
   async create(organization) {
     if (this.#session) throw new Error("SESSION_EXISTS");
     if (!/^[0-9]{4}$/.test(organization)) throw new Error("INVALID_INPUT");
-    if (this.#pairing && !["PAIRED", "FAILED"].includes(this.#pairing.status))
+    if (this.#pairing && (this.#pairing.organization !== organization || !["PAIRED", "FAILED"].includes(this.#pairing.status)))
       throw new Error("CERTIFICATE_CONFLICT");
     const s = this.#pairing
       ? await this.#request(

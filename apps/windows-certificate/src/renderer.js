@@ -15,7 +15,8 @@ let institutions = [],
   qrDeadline,
   sessionDeadline,
   retryContext;
-let paired = false,
+let pairedOrganization,
+  paired = false,
   pairTimer,
   pairEpoch = 0;
 let generation = 0,
@@ -99,10 +100,17 @@ async function terminal(session) {
       session.failureMessage || "인증에 실패했어요. 인증서를 다시 선택해 주세요.";
     $("authenticationFailureText").textContent = failureText;
     await new Promise((resolve) => {
-      $("authenticationFailure").addEventListener("close", resolve, {
+      const dialog = $("authenticationFailure");
+      const finish = () => {
+        dialog.removeEventListener("close", finish);
+        $("retryAuthentication").removeEventListener("click", finish);
+        resolve();
+      };
+      dialog.addEventListener("close", finish, { once: true });
+      $("retryAuthentication").addEventListener("click", finish, {
         once: true,
       });
-      $("authenticationFailure").showModal();
+      dialog.showModal();
     });
     if (terminalEpoch !== generation) return true;
     await window.certificate.retry();
@@ -170,12 +178,10 @@ function reset() {
   beginPairing();
 }
 function requirements() {
-  const i = institutions.find(
-    (i) => i.organization === $("organization").value,
-  );
-  const account = Boolean(
-    i?.registrationAccountRequired || i?.accountListAccountRequired,
-  );
+  $("organization").value = pairedOrganization || "";
+  $("organization").disabled = true;
+  const i = institutions.find((i) => i.organization === pairedOrganization);
+  const account = i?.authenticationLevel === 3;
   $("accountFields").hidden = !account;
   $("accountNumber").required = $("accountPassword").required = account;
   $("birthField").hidden = !i?.birthDateRequired;
@@ -319,13 +325,16 @@ window.addEventListener("focus", () => {
     discover("usb");
 });
 $("organization").addEventListener("change", requirements);
+$("retryAuthentication").addEventListener("click", () => {
+  if ($("authenticationFailure").open) $("authenticationFailure").close();
+});
 for (const id of ["password", "accountNumber", "accountPassword", "birthDate"])
   $(id).addEventListener("input", requirements);
 $("registration").addEventListener("submit", async (event) => {
   event.preventDefault();
   if (!paired) return;
   const epoch = ++generation;
-  const organization = $("organization").value;
+  const organization = pairedOrganization;
   retryContext = {
     organization,
     source: $("usb").getAttribute("aria-pressed") === "true" ? "usb" : "computer",
@@ -479,14 +488,14 @@ $("cancel").addEventListener("click", async () => {
 window.certificate
   .init()
   .then((list) => {
-    institutions = list.filter((i) => i.supported);
+    institutions = list;
     for (const i of institutions) {
       const option = document.createElement("option");
       option.value = i.organization;
       option.textContent = i.name;
       $("organization").append(option);
     }
-    $("organization").disabled = institutions.length === 0;
+    $("organization").disabled = true;
     message(institutions.length ? "" : "현재 연결 가능한 금융사가 없어요.");
     if (institutions.length) beginPairing();
   })
@@ -503,6 +512,8 @@ async function beginPairing() {
   const epoch = ++pairEpoch;
   clearTimeout(pairTimer);
   paired = false;
+  pairedOrganization = undefined;
+  requirements();
   $("pairing").hidden = false;
   $("pairingQr").hidden = true;
   $("retryPairing").hidden = true;
@@ -529,6 +540,9 @@ async function pollPairing(epoch, deadline) {
     const p = await window.certificate.pairStatus();
     if (epoch !== pairEpoch) return;
     if (p.status === "PAIRED") {
+      if (!institutions.some(i => i.organization === p.organization))
+        throw new Error("CERTIFICATE_BANK_UNAVAILABLE");
+      pairedOrganization = p.organization;
       paired = true;
       $("pairingQr").removeAttribute("src");
       $("pairing").hidden = true;

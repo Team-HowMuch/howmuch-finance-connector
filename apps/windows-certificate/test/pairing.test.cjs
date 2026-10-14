@@ -9,7 +9,8 @@ const expiry = () =>
 function fixture() {
   let status = "WAITING_FOR_MOBILE",
     calls = [],
-    failCancel = false;
+    failCancel = false,
+    organization = "0020";
   const client = new CertificateClient(
     "http://127.0.0.1:18081",
     async (url, options) => {
@@ -33,7 +34,7 @@ function fixture() {
               expiresAt: expiry(),
             }
           : url.endsWith("/pc")
-            ? { id, status, expiresAt: expiry() }
+            ? { id, status, organization: status === "WAITING_FOR_MOBILE" ? null : organization, expiresAt: expiry() }
             : { id: session, status, expiresAt: expiry() };
       return new Response(JSON.stringify({ success: true, data }));
     },
@@ -43,6 +44,7 @@ function fixture() {
     client,
     calls,
     setStatus: (s) => (status = s),
+    setOrganization: (o) => (organization = o),
     failCancel: () => (failCancel = true),
   };
 }
@@ -55,7 +57,9 @@ test("initial QR prevents registration until mobile pairing and keeps capabiliti
   assert.equal(f.calls.length, 1);
   f.setStatus("PAIRED");
   const status = await f.client.pairingStatus();
-  assert.deepEqual(Object.keys(status).sort(), ["expiresAt", "status"]);
+  assert.deepEqual(Object.keys(status).sort(), ["expiresAt", "organization", "status"]);
+  assert.equal(status.organization, "0020");
+  await assert.rejects(f.client.create("0004"), /CERTIFICATE_CONFLICT/);
   const s = await f.client.create("0020");
   assert.equal(s.id, session);
   assert.equal(s.pcCapability, undefined);
@@ -135,4 +139,24 @@ test("only confirmed failures retry within the same mobile pairing", async () =>
   await f.client.create("0020");
   assert.equal(f.calls.filter(c => c.url.endsWith("/certificate-pairings")).length, 1);
   assert.equal(f.calls.filter(c => c.url.endsWith("/registrations")).length, 2);
+});
+
+for (const organization of [null, "ABCD", "20"]) {
+  test(`paired state cannot unlock without a valid mobile bank: ${organization}`, async () => {
+    const f = fixture();
+    await f.client.startPairing();
+    f.setStatus("PAIRED");
+    f.setOrganization(organization);
+    await assert.rejects(f.client.pairingStatus(), /CERTIFICATE_BANK_SELECTION_REQUIRED/);
+    await assert.rejects(f.client.create("0020"), /CERTIFICATE_CONFLICT/);
+    assert.equal(f.calls.filter(c => c.url.endsWith("/registrations")).length, 0);
+  });
+}
+test("polling cannot change a mobile-selected bank", async () => {
+  const f = fixture();
+  await f.client.startPairing();
+  f.setStatus("PAIRED");
+  await f.client.pairingStatus();
+  f.setOrganization("0004");
+  await assert.rejects(f.client.pairingStatus(), /INVALID_RESPONSE/);
 });
