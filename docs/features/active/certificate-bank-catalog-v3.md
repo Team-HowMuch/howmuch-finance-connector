@@ -24,3 +24,14 @@
 - Windows x64 NSIS, macOS arm64/x64 DMG 로컬 빌드 예정.
 - 실제 CODEF·Windows PC·Intel native·Gatekeeper 다운로드 검증은 별도 필요.
 - 새 앱은 Backend v3 카탈로그 배포 전 사용할 수 없다. v2로 조용히 전환하지 않는다.
+
+## 2026-10-14 최종 로컬 배포 검증
+
+- `npm test`: 42개 통과, `npm run test:smoke` 통과, `npm audit --omit=dev --audit-level=high`: 0 vulnerabilities.
+- Windows x64 NSIS 및 macOS arm64/x64 DMG 빌드 통과. dev API 및 0.1.12-rc.2 버전으로 패키징했다.
+- `verify-mac.cjs arm64`, `verify-mac.cjs x64`: deep strict ad-hoc 서명, hardened runtime, ASAR 내 dev origin, 실제 패키징 앱 startup 통과. x64 최초 Rosetta debugger 시작 시간 초과 후 빌드 부하가 끝난 상태의 재검증에서 통과했다.
+- Windows ASAR의 버전·dev API·v3 호출과 PE header를 확인했다. Windows native 실행은 미검증이다.
+- 설치 파일 3종 및 각각 SHA-256을 `dist/release/HowMuch-Certificate-0.1.12-rc.2-dev-*`로 준비했다.
+- Connector `./gradlew clean build --no-daemon`: 21개 중 DB 의존 테스트 1개 실패. 기본 25432 PostgreSQL 부재이며 대체 테스트 DB 생성도 Docker read-only filesystem 오류로 실패했다. Java 변경은 없다.
+- 원격 Actions는 조직 결제/사용 한도 문제로 job 시작 전에 차단됐다. 로컬 성공과 원격 상태를 구분해 기록한다.
+- Backend PR: Team-HowMuch/howmuch-backend-v2#543. v3 API와 V53 배포 후 새 앱을 사용한다.
