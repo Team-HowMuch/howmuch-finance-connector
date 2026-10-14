@@ -1,12 +1,13 @@
 {
   "name": "howmuch-certificate",
-  "version": "0.1.11",
+  "version": "0.1.12-rc.1",
   "private": true,
   "description": "얼마 인증서 가져오기",
   "main": "src/main.cjs",
   "scripts": {
     "start": "electron .",
     "test": "node --test test/*.test.cjs",
+    "test:manual": "node test/manual-server.cjs",
     "configure": "node scripts/configure.cjs",
     "dist:win": "electron-builder --win nsis --x64 --publish never",
     "test:smoke": "electron test/smoke.cjs",
@@ -17,7 +18,8 @@
   },
   "devDependencies": {
     "electron": "44.7.0",
-    "electron-builder": "26.15.3"
+    "electron-builder": "26.15.3",
+    "jsqr": "^1.4.0"
   },
   "build": {
     "appId": "team.howmuch.certificate",

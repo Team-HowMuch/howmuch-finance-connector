@@ -13,7 +13,8 @@ let institutions = [],
   timer,
   claimId,
   qrDeadline,
-  sessionDeadline;
+  sessionDeadline,
+  retryContext;
 let paired = false,
   pairTimer,
   pairEpoch = 0;
@@ -24,6 +25,7 @@ let generation = 0,
   storageRevision,
   retryUsbOnFocus = false;
 function message(text) {
+  $("message").setAttribute("role", "status");
   $("message").textContent = text;
   $("message").hidden = !text;
 }
@@ -93,6 +95,16 @@ async function terminal(session) {
     return true;
   }
   if (session.status === "FAILED") {
+    const failureText =
+      session.failureMessage || "인증에 실패했어요. 인증서를 다시 선택해 주세요.";
+    $("authenticationFailureText").textContent = failureText;
+    await new Promise((resolve) => {
+      $("authenticationFailure").addEventListener("close", resolve, {
+        once: true,
+      });
+      $("authenticationFailure").showModal();
+    });
+    if (terminalEpoch !== generation) return true;
     await window.certificate.retry();
     if (terminalEpoch !== generation) return true;
     const retryEpoch = ++generation;
@@ -105,9 +117,12 @@ async function terminal(session) {
     $("registration").hidden = false;
     $("submit").disabled = true;
     step(2);
-    await discover("auto");
+    await discover(retryContext?.source || "auto");
     if (retryEpoch !== generation) return true;
-    message(session.failureMessage || "인증에 실패했어요. 인증서를 다시 선택해 주세요.");
+    if (retryContext) $("organization").value = retryContext.organization;
+    requirements();
+    // The failure dialog already showed this error. Keep the retry form clear.
+    message("");
     return true;
   }
   if (!["FAILED", "UNKNOWN", "EXPIRED", "CANCELLED"].includes(session.status))
@@ -134,6 +149,8 @@ function reset() {
   clearQr();
   clearClaim();
   sessionDeadline = undefined;
+  retryContext = undefined;
+  if ($("authenticationFailure").open) $("authenticationFailure").close();
   selected = undefined;
   $("reject").hidden = false;
   $("cancel").textContent = "취소";
@@ -308,6 +325,11 @@ $("registration").addEventListener("submit", async (event) => {
   event.preventDefault();
   if (!paired) return;
   const epoch = ++generation;
+  const organization = $("organization").value;
+  retryContext = {
+    organization,
+    source: $("usb").getAttribute("aria-pressed") === "true" ? "usb" : "computer",
+  };
   clearTimeout(timer);
   clearQr();
   clearClaim();
@@ -319,7 +341,7 @@ $("registration").addEventListener("submit", async (event) => {
   message("");
   try {
     const submitted = await window.certificate.submit(
-      $("organization").value,
+      organization,
       selected,
       {
         password: $("password").value,
@@ -544,6 +566,7 @@ async function monitorPairing(epoch) {
     if (["CANCELLED", "EXPIRED"].includes(state.status)) {
       ++generation;
       paired = false;
+      if ($("authenticationFailure").open) $("authenticationFailure").close();
       clearTimeout(timer);
       clearCredentials();
       selected = undefined;
