@@ -170,3 +170,14 @@ node test/packaged-smoke.cjs "dist/win-unpacked/얼마 인증서 가져오기.ex
 ## 보안 경계
 
 인증서 탐색·파일 읽기·업로드는 Electron main에서 처리합니다. renderer에는 파일 경로·개인키·PC capability를 전달하지 않으며 sandbox/contextIsolation과 제한된 preload API를 사용합니다. 개인키는 명시적 제출 때만 읽고 전송 뒤 버퍼를 비웁니다. QR에는 connectedId·인증서·암호·JWT를 넣지 않습니다. 오류 화면에는 정해진 한국어 문구만 표시하고 CODEF 원문은 표시하지 않습니다.
+
+
+### 인증 실패 재시도와 종료 취소
+
+인증이 확정 실패하면 오류 안내와 함께 인증서 선택으로 돌아갑니다. 암호를 다시 입력하고 인증서를 선택합니다. 휴대폰 연결과 QR은 유지됩니다. 처리 결과가 불확실한 UNKNOWN 상태에서는 자동 재시도하지 않습니다.
+
+PC 앱을 정상 종료하면 진행 중 요청이 끝난 뒤 서버의 취소 응답을 기다립니다. 취소를 확인하지 못하면 창을 유지하고 안내합니다. 이미 승인된 계좌 연결은 삭제하지 않습니다.
+
+모바일은 연결 화면 이탈·취소·정상 종료에서 소유자 JWT로 `DELETE /api/v2/certificate-pairings/{id}`를 호출합니다(body 없음). PC는 취소 상태를 감시합니다. 실패 후에도 pairing 상태 조회를 유지하고 새 시도의 최신 sessionId를 사용해야 합니다. 모바일 lifecycle 구현은 별도 모바일 저장소에서 연결해야 합니다. OS 강제 종료/네트워크 단절에서는 요청을 보장할 수 없어 기존 세션 만료가 적용됩니다.
+
+업데이트한 앱은 backend V51 migration과 위 모바일 취소 API 배포 후 사용합니다.

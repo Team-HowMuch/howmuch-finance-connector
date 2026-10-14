@@ -23,6 +23,7 @@ contextBridge.exposeInMainWorld(
     qr: () => ipcRenderer.invoke("certificate:qr"),
     claim: () => ipcRenderer.invoke("certificate:claim"),
     reject: (id) => ipcRenderer.invoke("certificate:reject", id),
+    retry: () => ipcRenderer.invoke("certificate:retry"),
     cancel: () => ipcRenderer.invoke("certificate:cancel"),
   }),
 );
