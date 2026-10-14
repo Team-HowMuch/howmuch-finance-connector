@@ -2,6 +2,29 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const { CertificateClient } = require("../src/client.cjs");
+test("The shared public bank catalog exposes all authentication levels", async () => {
+  let requestedUrl;
+  const client = new CertificateClient(
+    "http://127.0.0.1:18081",
+    async (url) => {
+      requestedUrl = String(url);
+      return new Response(JSON.stringify({
+        success: true,
+        data: [
+          { organization: "0001", name: "1단계", authenticationLevel: 1 },
+          { organization: "0002", name: "2단계", authenticationLevel: 2 },
+          { organization: "0020", name: "3단계", authenticationLevel: 3 },
+        ],
+      }));
+    },
+    true,
+  );
+  const banks = await client.banks();
+  assert.equal(requestedUrl, "http://127.0.0.1:18081/api/v3/banks");
+  assert.deepEqual(banks.map((bank) => bank.authenticationLevel), [1, 2, 3]);
+  assert.equal(banks[2].requiresAccountCredentials, undefined);
+});
+
 test("A completed connection can be cleared without deleting the bank connection", async () => {
   const calls = [];
   const id = "00000000-0000-4000-8000-000000000001";

@@ -99,10 +99,17 @@ async function terminal(session) {
       session.failureMessage || "인증에 실패했어요. 인증서를 다시 선택해 주세요.";
     $("authenticationFailureText").textContent = failureText;
     await new Promise((resolve) => {
-      $("authenticationFailure").addEventListener("close", resolve, {
+      const dialog = $("authenticationFailure");
+      const finish = () => {
+        dialog.removeEventListener("close", finish);
+        $("retryAuthentication").removeEventListener("click", finish);
+        resolve();
+      };
+      dialog.addEventListener("close", finish, { once: true });
+      $("retryAuthentication").addEventListener("click", finish, {
         once: true,
       });
-      $("authenticationFailure").showModal();
+      dialog.showModal();
     });
     if (terminalEpoch !== generation) return true;
     await window.certificate.retry();
@@ -173,9 +180,7 @@ function requirements() {
   const i = institutions.find(
     (i) => i.organization === $("organization").value,
   );
-  const account = Boolean(
-    i?.registrationAccountRequired || i?.accountListAccountRequired,
-  );
+  const account = i?.authenticationLevel === 3;
   $("accountFields").hidden = !account;
   $("accountNumber").required = $("accountPassword").required = account;
   $("birthField").hidden = !i?.birthDateRequired;
@@ -319,6 +324,9 @@ window.addEventListener("focus", () => {
     discover("usb");
 });
 $("organization").addEventListener("change", requirements);
+$("retryAuthentication").addEventListener("click", () => {
+  if ($("authenticationFailure").open) $("authenticationFailure").close();
+});
 for (const id of ["password", "accountNumber", "accountPassword", "birthDate"])
   $(id).addEventListener("input", requirements);
 $("registration").addEventListener("submit", async (event) => {
@@ -479,7 +487,7 @@ $("cancel").addEventListener("click", async () => {
 window.certificate
   .init()
   .then((list) => {
-    institutions = list.filter((i) => i.supported);
+    institutions = list;
     for (const i of institutions) {
       const option = document.createElement("option");
       option.value = i.organization;

@@ -15,7 +15,7 @@ class CertificateClient {
     this.#origin = apiOrigin(origin, local);
     this.#fetch = fetchImpl;
   }
-  async #request(method, suffix = "", body, upload = false, pairing = false) {
+  async #request(method, suffix = "", body, upload = false, pairing = false, bankCatalog = false) {
     const headers = { "Content-Type": "application/json" };
     const capability = pairing
       ? this.#pairing?.pcCapability
@@ -23,7 +23,7 @@ class CertificateClient {
     if (capability) headers["X-PC-Capability"] = capability;
     if (upload) headers["X-Upload-Capability"] = this.#session.uploadCapability;
     const response = await this.#fetch(
-      `${this.#origin}/api/v2/${pairing ? "certificate-pairings" : "certificate-registrations"}${suffix}`,
+      `${this.#origin}/api/${bankCatalog ? "v3/banks" : pairing ? "v2/certificate-pairings" : "v2/certificate-registrations"}${suffix}`,
       {
         method,
         headers,
@@ -54,9 +54,20 @@ class CertificateClient {
     }
     return parsed.data;
   }
-  async institutions() {
-    const list = await this.#request("GET", "/institutions");
-    if (!Array.isArray(list)) throw new Error("INVALID_RESPONSE");
+  async banks() {
+    const list = await this.#request("GET", "", undefined, false, false, true);
+    if (
+      !Array.isArray(list) ||
+      list.some(
+        (bank) =>
+          !bank ||
+          typeof bank.organization !== "string" ||
+          !/^\d{4}$/.test(bank.organization) ||
+          typeof bank.name !== "string" ||
+          ![1, 2, 3].includes(bank.authenticationLevel),
+      )
+    )
+      throw new Error("INVALID_RESPONSE");
     return list;
   }
   async startPairing() {

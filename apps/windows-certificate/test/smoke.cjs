@@ -67,15 +67,11 @@ async function run() {
       res.setHeader("Content-Type", "application/json");
       res.end(JSON.stringify({ success: true, data }));
     };
-    if (req.url.endsWith("/institutions"))
+    if (req.url.endsWith("/api/v3/banks"))
       return send([
-        {
-          organization: "0020",
-          name: "테스트 은행",
-          supported: true,
-          registrationAccountRequired: true,
-          birthDateRequired: true,
-        },
+        { organization: "0001", name: "1단계 은행", authenticationLevel: 1 },
+        { organization: "0002", name: "2단계 은행", authenticationLevel: 2 },
+        { organization: "0020", name: "테스트 은행", authenticationLevel: 3 },
       ]);
     if (req.url.endsWith("/certificate-pairings")) {
       creates++;
@@ -192,6 +188,28 @@ async function run() {
     '!document.getElementById("registration").hidden && document.querySelector("input[name=certificate]") && document.getElementById("certificatePanel").getAttribute("aria-busy")==="false"',
     "PC input unlocks only after mobile pairing",
   );
+  assert.equal(
+    await w.webContents.executeJavaScript(
+      `JSON.stringify([...document.getElementById('organization').options].slice(1).map(o=>o.value))`,
+    ),
+    JSON.stringify(["0001", "0002", "0020"]),
+  );
+  for (const [organization, expectedVisible] of [
+    ["0001", false],
+    ["0002", false],
+    ["0020", true],
+  ]) {
+    await w.webContents.executeJavaScript(
+      `document.getElementById('organization').value=${JSON.stringify(organization)};document.getElementById('organization').dispatchEvent(new Event('change'))`,
+    );
+    assert.equal(
+      await w.webContents.executeJavaScript(
+        '!document.getElementById("accountFields").hidden && document.getElementById("accountNumber").required && document.getElementById("accountPassword").required',
+      ),
+      expectedVisible,
+      `Account fields must follow authentication level for ${organization}`,
+    );
+  }
   await w.webContents.executeJavaScript(
     `document.getElementById('organization').value='0020';document.getElementById('organization').dispatchEvent(new Event('change'));document.querySelector('input[name=certificate]').click();for(const [id,value] of Object.entries({password:'synthetic-password',accountNumber:'123456',accountPassword:'1234',birthDate:'19900101'})){document.getElementById(id).value=value;document.getElementById(id).dispatchEvent(new Event('input'));}`,
   );
