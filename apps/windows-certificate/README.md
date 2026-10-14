@@ -164,8 +164,8 @@ CODEF의 기존 connectedId add/update는 PC 인증 단계에서 수행됩니다
 
 QR 형식은 `{ "v": 2, "type": "HOWMUCH_CERTIFICATE_PAIRING", "pairingId": "UUID", "qrToken": "일회용 토큰" }`입니다. QR/토큰을 로그나 공개 채팅에 남기지 않습니다. 기존 v1 `HOWMUCH_CERTIFICATE_CLAIM` QR는 구버전 흐름이며 새 모바일 연동에서 구분해야 합니다.
 
-- `POST /api/v2/certificate-pairings/{pairingId}/claim`, JWT + `{ "qrToken": "..." }`: 최초 사용자 연결. 동일 사용자 재시도는 멱등이며 다른 사용자는 거절합니다.
-- `GET /api/v2/certificate-pairings/{pairingId}`, JWT: `PAIRED`는 PC 입력 대기, `SUBMITTED`/`REGISTERING`은 금융사 인증 대기. 모바일에서 “연결됐어요 / PC에서 인증을 진행해 주세요”와 대기 화면을 표시합니다.
+- `POST /api/v2/certificate-pairings/{pairingId}/claim`, JWT + `{ "qrToken": "...", "organization": "0020" }`: 모바일에서 선택한 금융기관을 필수로 전달합니다. 최초 사용자와 금융기관에 고정되며 동일 사용자·동일 금융기관 재시도만 멱등입니다. 다른 사용자는 404, 같은 사용자의 은행 변경은 409입니다.
+- `GET /api/v2/certificate-pairings/{pairingId}`, JWT: `organization`은 등록 전부터 반환되며 PC 앱에서 해당 은행을 선택·비활성화합니다. `PAIRED`는 PC 입력 대기, `SUBMITTED`/`REGISTERING`은 금융사 인증 대기. 모바일에서 “연결됐어요 / PC에서 인증을 진행해 주세요”와 대기 화면을 표시합니다.
 - `READY_FOR_CLAIM`이면 `POST /api/v2/certificate-pairings/{pairingId}/approval`을 호출합니다. 응답의 `claimId`와 상태 응답의 `sessionId`를 사용합니다.
 - `POST /api/v2/certificate-claims/{sessionId}/{claimId}/decision`, `{ "approved": true | false }`: 금융사 확인 후 최종 Yes/No. Yes는 추가 CODEF 호출 없이 DB 저장하며 성공 상태는 `BOUND`입니다.
 - `FAILED`는 `failureCode`/`failureMessage`를 표시합니다. `UNKNOWN`은 결과 불명으로 자동 재등록하지 않고 운영 확인이 필요합니다. `EXPIRED`/`CANCELLED`는 현재 흐름을 종료합니다.
@@ -217,3 +217,9 @@ PC 앱을 정상 종료하면 진행 중 요청이 끝난 뒤 서버의 취소 �
 ### v3 은행 카탈로그 · 0.1.12-rc.2
 
 이 버전부터 은행 목록은 공개 `GET /api/v3/banks`를 사용합니다. Backend의 V53 인증 수준 데이터와 v3 API를 먼저 배포해야 합니다. 기존 pairing·등록·승인 API는 v2입니다. 인증서 앱에서는 수준 1·2일 때 계좌 입력을 숨기고 수준 3일 때 계좌번호·계좌 비밀번호를 필수로 표시합니다. 레거시 `/api/v2/accounts/banks` 응답은 서버에서 유지됩니다.
+
+### 모바일 선택 금융기관 고정 (0.1.12-rc.3)
+
+모바일은 `GET /api/v3/banks`로 선택한 은행의 `organization`을 초기 QR claim에 전달합니다. PC는 해당 은행을 변경할 수 없으며 `authenticationLevel: 3`에만 계좌번호·계좌 비밀번호 입력란이 표시됩니다. 생년월일 입력은 은행별 기존 요구를 따릅니다. 실패 후 재시도에도 같은 은행을 유지합니다. 은행을 바꾸려면 기존 연결을 취소하고 새 QR로 연결합니다.
+
+서버 V55 migration 및 모바일 organization 저장/반환 구현이 선행되어야 합니다. 구형 서버가 은행을 반환하지 않으면 PC 앱은 임의 은행을 선택하지 않고 새 연결 안내를 표시합니다. 실제 모바일 저장소는 별도 반영이 필요하며 수동 테스트 HTML은 은행 선택과 organization 전송을 포함합니다.

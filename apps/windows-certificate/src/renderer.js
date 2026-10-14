@@ -15,7 +15,8 @@ let institutions = [],
   qrDeadline,
   sessionDeadline,
   retryContext;
-let paired = false,
+let pairedOrganization,
+  paired = false,
   pairTimer,
   pairEpoch = 0;
 let generation = 0,
@@ -177,9 +178,9 @@ function reset() {
   beginPairing();
 }
 function requirements() {
-  const i = institutions.find(
-    (i) => i.organization === $("organization").value,
-  );
+  $("organization").value = pairedOrganization || "";
+  $("organization").disabled = true;
+  const i = institutions.find((i) => i.organization === pairedOrganization);
   const account = i?.authenticationLevel === 3;
   $("accountFields").hidden = !account;
   $("accountNumber").required = $("accountPassword").required = account;
@@ -333,7 +334,7 @@ $("registration").addEventListener("submit", async (event) => {
   event.preventDefault();
   if (!paired) return;
   const epoch = ++generation;
-  const organization = $("organization").value;
+  const organization = pairedOrganization;
   retryContext = {
     organization,
     source: $("usb").getAttribute("aria-pressed") === "true" ? "usb" : "computer",
@@ -494,7 +495,7 @@ window.certificate
       option.textContent = i.name;
       $("organization").append(option);
     }
-    $("organization").disabled = institutions.length === 0;
+    $("organization").disabled = true;
     message(institutions.length ? "" : "현재 연결 가능한 금융사가 없어요.");
     if (institutions.length) beginPairing();
   })
@@ -511,6 +512,8 @@ async function beginPairing() {
   const epoch = ++pairEpoch;
   clearTimeout(pairTimer);
   paired = false;
+  pairedOrganization = undefined;
+  requirements();
   $("pairing").hidden = false;
   $("pairingQr").hidden = true;
   $("retryPairing").hidden = true;
@@ -537,6 +540,9 @@ async function pollPairing(epoch, deadline) {
     const p = await window.certificate.pairStatus();
     if (epoch !== pairEpoch) return;
     if (p.status === "PAIRED") {
+      if (!institutions.some(i => i.organization === p.organization))
+        throw new Error("CERTIFICATE_BANK_UNAVAILABLE");
+      pairedOrganization = p.organization;
       paired = true;
       $("pairingQr").removeAttribute("src");
       $("pairing").hidden = true;

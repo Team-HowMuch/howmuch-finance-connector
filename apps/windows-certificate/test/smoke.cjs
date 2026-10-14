@@ -12,6 +12,7 @@ app.disableHardwareAcceleration();
 let server,
   directory,
   paired = false,
+  mobileOrganization = "0001",
   expired = false,
   status = "CREATED",
   failureCode,
@@ -96,10 +97,12 @@ async function run() {
         id: pairId,
         status: mobileCancelled ? "CANCELLED" : expired ? "EXPIRED" : paired ? "PAIRED" : "WAITING_FOR_MOBILE",
         expiresAt: expiry(),
+        organization: paired ? mobileOrganization : null,
       });
     }
     if (req.url.endsWith("/registrations")) {
       assert.ok(paired);
+      assert.equal(JSON.parse(body).organization, mobileOrganization);
       assert.equal(req.headers["x-pc-capability"], "P".repeat(43));
       return send({
         id,
@@ -194,21 +197,20 @@ async function run() {
     ),
     JSON.stringify(["0001", "0002", "0020"]),
   );
-  for (const [organization, expectedVisible] of [
-    ["0001", false],
-    ["0002", false],
-    ["0020", true],
-  ]) {
-    await w.webContents.executeJavaScript(
-      `document.getElementById('organization').value=${JSON.stringify(organization)};document.getElementById('organization').dispatchEvent(new Event('change'))`,
-    );
-    assert.equal(
-      await w.webContents.executeJavaScript(
-        '!document.getElementById("accountFields").hidden && document.getElementById("accountNumber").required && document.getElementById("accountPassword").required',
-      ),
-      expectedVisible,
-      `Account fields must follow authentication level for ${organization}`,
-    );
+  for (const [organization, expectedVisible] of [["0001", false], ["0002", false], ["0020", true]]) {
+    if (organization !== mobileOrganization) {
+      paired = false;
+      await w.webContents.executeJavaScript('document.getElementById("cancel").click()');
+      await wait(w, '!document.getElementById("pairing").hidden && !document.getElementById("pairingQr").hidden && document.getElementById("pairingQr").getAttribute("src")?.startsWith("data:")', "Next bank needs a fresh pairing QR");
+      mobileOrganization = organization;
+      paired = true;
+      await wait(w, '!document.getElementById("registration").hidden && document.querySelector("input[name=certificate]")', "Mobile bank unlocks PC form");
+    }
+    assert.equal(await w.webContents.executeJavaScript('document.getElementById("organization").value'), organization);
+    assert.equal(await w.webContents.executeJavaScript('document.getElementById("organization").disabled'), true);
+    assert.equal(await w.webContents.executeJavaScript('!document.getElementById("accountFields").hidden && document.getElementById("accountNumber").required && document.getElementById("accountPassword").required'), expectedVisible);
+    await w.webContents.executeJavaScript("document.getElementById('organization').value='9999';document.getElementById('organization').dispatchEvent(new Event('change'))");
+    assert.equal(await w.webContents.executeJavaScript('document.getElementById("organization").value'), organization, "PC cannot switch the mobile bank");
   }
   await w.webContents.executeJavaScript(
     `document.getElementById('organization').value='0020';document.getElementById('organization').dispatchEvent(new Event('change'));document.querySelector('input[name=certificate]').click();for(const [id,value] of Object.entries({password:'synthetic-password',accountNumber:'123456',accountPassword:'1234',birthDate:'19900101'})){document.getElementById(id).value=value;document.getElementById(id).dispatchEvent(new Event('input'));}`,

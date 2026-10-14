@@ -33,6 +33,7 @@
   "CERTIFICATE_EXPIRED": "등록 또는 QR 시간이 만료되었습니다.",
   "CERTIFICATE_CONFLICT": "현재 상태에서는 처리할 수 없습니다.",
   "CERTIFICATE_INPUT_INVALID": "인증서 또는 추가 입력이 올바르지 않습니다.",
+  "CERTIFICATE_BANK_SELECTION_REQUIRED": "휴대폰에서 금융기관을 선택한 뒤 새 QR로 다시 연결해 주세요.",
   "CERTIFICATE_BANK_UNAVAILABLE": "인증서 등록을 지원하지 않는 금융사입니다.",
   "CERTIFICATE_STORAGE_UNAVAILABLE": "인증서 보안 저장소를 사용할 수 없습니다.",
   "CERTIFICATE_RATE_LIMITED": "잠시 후 다시 시도해주세요.",
