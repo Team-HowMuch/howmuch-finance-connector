@@ -58,3 +58,40 @@
 - Windows x64 전용 NSIS 재빌드 완료. Mac arm64/x64 설치본과 함께 로컬 프리릴리즈로 게시한다.
 - PR #40의 GitHub Actions는 account payment/spending limit으로 runner 시작 전에 차단됐다. 로컬 검증 결과와 구분한다.
 - develop/main 머지는 이 PR의 검토 대상으로 남긴다. 실제 Windows 실행 검증은 미수행이다.
+
+## 2026-10-15 제출 예외의 원인 소실 조사
+- 증상: 0.1.12-rc.3에서 제출 직후 동일한 '접수 결과를 확인한 뒤 다시 시도' 안내가 표시된다.
+- 확인된 결함: main.cjs trusted가 알려지지 않은 로컬 오류를 OPERATION_FAILED로 덮어쓰고 renderer가 모든 제출 예외에 같은 fallback을 사용한다. 사용자 요청 자체의 실제 실패 원인은 아직 미확정이다.
+- 변경 범위: 제출 INPUT/FILES/REGISTRATION/UPLOAD 단계와 allowlist 오류 분류만 IPC로 전달한다. 원문 오류, 경로, 인증서, 입력값, 서버 body는 전달하거나 로그에 쓰지 않는다. HTTP 상태만 공개 진단으로 표시한다.
+- DB/API 변경 없음, migration 불필요. 기존 공통 오류코드와 사용자 문구 우선 유지.
+- 예상 커밋: fix(certificate): 제출 실패 단계와 안전한 오류 원인 표시. 이번에는 로컬 검증까지만 수행하며 설치본은 아직 변경하지 않는다.
+- 검증: 미인식 제출 코드의 문구가 비어있는 기존 동작 재현 → 매핑 회귀 테스트, Node 전체 테스트, 실제 Electron 기존 흐름 및 synthetic 제출 실패 주입 확인.
+
+### 제출 예외 조사 검증 결과
+- 회귀 테스트 추가 후 수정 전 실패(submissionErrorCode 부재), 수정 후 Node 47개 전체 통과.
+- 기존 실제 Electron synthetic smoke(초기 연결·레벨별 필드·인증·최종 승인·비밀번호 실패·취소) 통과. 사용자의 현재 열린 설치 앱을 조작한 검증은 아니다.
+- 새 공개 진단 코드는 단계 및 allowlist 원인만 포함한다. 경로/암호 등이 담긴 원문 오류가 메시지에 포함되지 않는지 단언했다.
+- 사용자 스크린샷 원인의 확정, 실제 인증서 재현 및 설치본 교체는 미수행. 로컬 코드만 수정했고 commit/push/release는 하지 않았다.
+
+- 추가 확인: 현재 설치 앱의 stdout/stderr 둘 다 /dev/null이며 macOS 통합 로그에도 certificate:submit 원인이 남아 있지 않았다. 이 실패의 원래 예외는 사후 복원할 수 없었다.
+- 진단 포함 0.1.12-rc.4 Mac arm64 DMG 로컬 빌드 및 무결성 검증 통과. Node 47개 재검증 통과. 사용자 설치 앱 교체/실제 재시도는 아직 수행하지 않았다.
+
+## 2026-10-15 로컬 제출 오류의 모달 복귀
+- 사용자 확인 코드: CERTIFICATE_SUBMIT_INPUT_INPUT_INVALID. 서버 요청 이전 INPUT 검증 오류가 stopped 화면으로 처리되어 취소만 가능했던 문제.
+- INPUT/FILES의 확정적인 요청 전 오류는 기존 dialog로 안내 후 같은 pairing·organization·저장 위치에서 재선택한다. 등록/업로드의 불확실한 오류는 신규 등록을 자동 재시도하지 않는다.
+- 금융사 FAILED도 같은 모달/폼 복귀 helper를 사용하며 기존 retry API 호출은 유지한다.
+- 비밀번호 등 민감 입력은 지우고 파일 inventory를 다시 읽는다. pairing 취소·재생성은 하지 않는다. DB/API/마이그레이션 변경 없음.
+- 예상 커밋: fix(certificate): 입력 오류 모달 확인 후 기존 연결에서 재시도. 앱 버전 0.1.12-rc.5.
+- 회귀 테스트: 실제 renderer.js를 격리된 DOM fixture에서 실행해 INPUT/FILES 모달·확인 후 폼 복귀·은행 고정·QR 재발급/취소/retry 미호출을 확인한다. 변경 전 2개 단언 실패를 재현했다.
+
+- 검증 결과: Node 52개 전체 통과. 실제 renderer.js를 실행한 DOM 회귀 5개(로컬 INPUT/FILES 모달·기존 은행/연결 유지·불확실 업로드 재시도 금지·금융사 FAILED 기존 retry 유지·취소 후 stale 복귀 금지) 통과.
+- rc.5 arm64 DMG 로컬 빌드, 포함된 버전/수정 코드, codesign 검증 및 DMG 무결성 검증 통과. 현재 설치 앱의 실제 인증 재시도는 미수행. 커밋/푸시/릴리즈 게시 미수행.
+
+## rc.5 게시 계획 및 검증
+- 사용자 요청으로 최신 develop과 동일한 코드 기반에서 `fix/certificate-submit-modal-retry` 브랜치를 만들었다.
+- 커밋 경계: 제출 단계 안전 오류 매핑 / 로컬 입력 실패 모달 및 동일 연결 복귀 / rc.5 버전·게시 검증 및 모바일 API 화면 매핑 문서.
+- Windows x64 NSIS, macOS arm64·x64 DMG를 로컬 빌드했다. macOS ad-hoc 서명, DMG 무결성 검증 통과. Windows 실제 실행은 미수행.
+- Node 52개 및 실제 Electron synthetic smoke 통과. 사용자의 현재 열린 앱이나 실제 dev 금융사 연결을 검증한 것은 아니다.
+- dev 공개 OpenAPI는 develop의 v3 은행 계약과 다르다. 자세한 내용은 [모바일 API 화면 매핑](codef-mobile-api-design-alignment.md)에 기록한다. 서버 수정 없이 legacy 계약으로 fallback하지 않는다.
+- 사용자 소유 manual HTML·proxy의 dev 기본 주소 변경은 이번 커밋에 포함하지 않는다.
+- 최종 검증: 전용 PostgreSQL 테스트 DB를 준비해 `./gradlew clean build --no-daemon` 전체 통과. 테스트용 컨테이너 제거 완료. 세 설치본의 ASAR 수정 코드·버전·dev API 일치 및 SHA-256 검증 통과. 관련 이슈 #46.
