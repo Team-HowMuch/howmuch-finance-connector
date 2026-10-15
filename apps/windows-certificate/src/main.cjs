@@ -13,7 +13,7 @@ const path = require("node:path");
 const fs = require("node:fs/promises");
 const { pathToFileURL } = require("node:url");
 const QRCode = require("qrcode");
-const { CertificateClient, userErrorMessage } = require("./client.cjs");
+const { CertificateClient, userErrorMessage, submissionErrorCode } = require("./client.cjs");
 const { uploadFields, validSender } = require("./security.cjs");
 const { CertificateStore, defaultRoots } = require("./certificates.cjs");
 const { removableVolumes, storageState } = require("./volumes.cjs");
@@ -285,14 +285,21 @@ app.whenReady().then(async () => {
   ipcMain.handle(
     "certificate:submit",
     trusted(async (organization, certificateId, input) => {
-      if (closing || busy || discovering || !client) throw new Error("INVALID_INPUT");
-      const fields = uploadFields(input);
+      if (closing || busy || discovering || !client)
+        throw new Error("CERTIFICATE_SUBMIT_INPUT_BUSY");
       busy = true;
-      let material;
+      let material, stage = "INPUT";
       try {
+        const fields = uploadFields(input);
+        stage = "FILES";
         material = await certificates.material(certificateId);
+        stage = "REGISTRATION";
         await client.create(organization);
+        stage = "UPLOAD";
         return await client.upload(fields, material.der, material.key);
+      } catch (error) {
+        // Only allowlisted stage/reason crosses IPC; never forward paths or raw details.
+        throw new Error(submissionErrorCode(error, stage));
       } finally {
         material?.der.fill(0);
         material?.key.fill(0);

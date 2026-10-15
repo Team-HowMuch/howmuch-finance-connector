@@ -56,3 +56,19 @@ test("Cancelling a pending QR still calls the cancellation endpoint", async () =
   await client.cancel();
   assert.deepEqual(calls, ["POST", "DELETE"]);
 });
+
+test("submit failures preserve safe stage/reason while omitting raw error details", () => {
+  const { submissionErrorCode, userErrorMessage } = require("../src/client.cjs");
+  const error = Object.assign(new Error("private password /private/cert/key"), {code:"EACCES"});
+  const code = submissionErrorCode(error, "FILES");
+  assert.equal(code, "CERTIFICATE_SUBMIT_FILES_FILE_ACCESS_DENIED");
+  assert.ok(userErrorMessage(code).includes("인증서 파일 확인"));
+  assert.ok(!userErrorMessage(code).includes("private"));
+  assert.equal(submissionErrorCode(new Error("INVALID_INPUT"), "INPUT"), "CERTIFICATE_SUBMIT_INPUT_INPUT_INVALID");
+  assert.equal(submissionErrorCode(new Error("API_500"), "UPLOAD"), "CERTIFICATE_SUBMIT_UPLOAD_HTTP_500");
+  assert.ok(userErrorMessage("CERTIFICATE_SUBMIT_UPLOAD_HTTP_500").includes("HTTP 500"));
+  assert.equal(submissionErrorCode(new Error("BANK_CERTIFICATE_PASSWORD_INVALID"), "UPLOAD"), "BANK_CERTIFICATE_PASSWORD_INVALID");
+  assert.equal(submissionErrorCode(new Error("unknown private details"), "REGISTRATION"), "CERTIFICATE_SUBMIT_REGISTRATION_FAILED");
+  assert.equal(submissionErrorCode(new Error("unknown"), "private"), "OPERATION_FAILED");
+  assert.equal(userErrorMessage("CERTIFICATE_SUBMIT_FILES_PRIVATE_SECRET"), null);
+});

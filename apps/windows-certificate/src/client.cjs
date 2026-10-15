@@ -1,10 +1,29 @@
 "use strict";
 const { apiOrigin } = require("./security.cjs");
 const userErrors = require("./user-errors.json");
+const submitStages = { INPUT: "입력 확인", FILES: "인증서 파일 확인", REGISTRATION: "인증 등록 요청", UPLOAD: "인증서 업로드" };
 function userErrorMessage(code) {
-  return typeof code === "string" && Object.hasOwn(userErrors, code)
-    ? userErrors[code]
-    : null;
+  if (typeof code !== "string") return null;
+  if (Object.hasOwn(userErrors, code)) return userErrors[code];
+  const match = code.match(/^CERTIFICATE_SUBMIT_(INPUT|FILES|REGISTRATION|UPLOAD)_(INPUT_INVALID|FILE_INVALID|FILE_ACCESS_DENIED|FILE_UNAVAILABLE|TIMEOUT|FAILED|BUSY|HTTP_[1-5][0-9]{2})$/);
+  if (!match) return null;
+  const [, stage, reason] = match;
+  const text = reason.startsWith("HTTP_")
+    ? `서버가 요청을 처리하지 못했습니다. (HTTP ${reason.slice(5)})`
+    : userErrors[`CERTIFICATE_SUBMIT_REASON_${reason}`];
+  return `[${submitStages[stage]}] ${text} · ${code}`;
+}
+function submissionErrorCode(error, stage) {
+  if (!Object.hasOwn(submitStages, stage)) return "OPERATION_FAILED";
+  if (userErrorMessage(error?.message)) return error.message;
+  let reason = "FAILED";
+  if (error?.message === "INVALID_INPUT") reason = "INPUT_INVALID";
+  else if (["INVALID_CERTIFICATE", "INVALID_FILE", "CHANGED_FILE"].includes(error?.message)) reason = "FILE_INVALID";
+  else if (["EACCES", "EPERM"].includes(error?.code)) reason = "FILE_ACCESS_DENIED";
+  else if (["ENOENT", "ENODEV", "EIO"].includes(error?.code)) reason = "FILE_UNAVAILABLE";
+  else if (["TimeoutError", "AbortError"].includes(error?.name)) reason = "TIMEOUT";
+  else if (/^API_[1-5][0-9]{2}$/.test(error?.message || "")) reason = "HTTP_" + error.message.slice(4);
+  return `CERTIFICATE_SUBMIT_${stage}_${reason}`;
 }
 class CertificateClient {
   #origin;
@@ -235,4 +254,4 @@ class CertificateClient {
     this.#pairing = undefined;
   }
 }
-module.exports = { CertificateClient, userErrorMessage };
+module.exports = { CertificateClient, userErrorMessage, submissionErrorCode };

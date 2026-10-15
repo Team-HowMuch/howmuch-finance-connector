@@ -38,5 +38,12 @@
   "CERTIFICATE_STORAGE_UNAVAILABLE": "인증서 보안 저장소를 사용할 수 없습니다.",
   "CERTIFICATE_RATE_LIMITED": "잠시 후 다시 시도해주세요.",
   "CERTIFICATE_REGISTRATION_UNCERTAIN": "금융사 처리 결과를 확인해야 합니다. 중복 등록하지 말고 잠시 후 상태를 확인해주세요.",
-  "CERTIFICATE_OWNER_VERIFICATION_REQUIRED": "금융 명의 확인이 필요합니다."
+  "CERTIFICATE_OWNER_VERIFICATION_REQUIRED": "금융 명의 확인이 필요합니다.",
+  "CERTIFICATE_SUBMIT_REASON_INPUT_INVALID": "계좌번호·계좌 비밀번호·생년월일의 입력 형식을 확인해 주세요.",
+  "CERTIFICATE_SUBMIT_REASON_FILE_INVALID": "선택한 인증서가 변경되었거나 사용할 수 없습니다. 인증서를 다시 선택해 주세요.",
+  "CERTIFICATE_SUBMIT_REASON_FILE_ACCESS_DENIED": "인증서 파일을 읽을 권한이 없습니다. 저장 위치와 접근 권한을 확인해 주세요.",
+  "CERTIFICATE_SUBMIT_REASON_FILE_UNAVAILABLE": "인증서 파일을 찾거나 읽을 수 없습니다. USB 연결과 파일 위치를 확인해 주세요.",
+  "CERTIFICATE_SUBMIT_REASON_TIMEOUT": "서버 응답 시간이 초과됐습니다. 접수 여부를 확인한 뒤 다시 시도해 주세요.",
+  "CERTIFICATE_SUBMIT_REASON_FAILED": "이 단계에서 처리를 완료하지 못했습니다. 표시된 오류 코드를 알려주세요.",
+  "CERTIFICATE_SUBMIT_REASON_BUSY": "다른 인증서 작업이 진행 중입니다. 잠시 후 다시 시도해 주세요."
 }
