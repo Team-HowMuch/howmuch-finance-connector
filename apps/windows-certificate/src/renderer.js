@@ -79,6 +79,39 @@ async function knownError(error) {
     return null;
   }
 }
+async function showAuthenticationFailure(title, text, button = "확인") {
+  $("authenticationFailureTitle").textContent = title;
+  $("authenticationFailureText").textContent = text;
+  $("retryAuthentication").textContent = button;
+  await new Promise((resolve) => {
+    const dialog = $("authenticationFailure");
+    const finish = () => {
+      dialog.removeEventListener("close", finish);
+      $("retryAuthentication").removeEventListener("click", finish);
+      resolve();
+    };
+    dialog.addEventListener("close", finish, { once: true });
+    $("retryAuthentication").addEventListener("click", finish, { once: true });
+    dialog.showModal();
+  });
+}
+async function restoreCertificateSelection(epoch) {
+  if (epoch !== generation) return;
+  const retryEpoch = ++generation;
+  clearTimeout(timer);
+  clearQr();
+  clearClaim();
+  clearCredentials();
+  selected = undefined;
+  $("progress").hidden = true;
+  $("registration").hidden = false;
+  $("submit").disabled = true;
+  step(2);
+  await discover(retryContext?.source || "auto");
+  if (retryEpoch !== generation) return;
+  requirements();
+  message("");
+}
 async function terminal(session) {
   const terminalEpoch = generation;
   if (session.status === "BOUND") {
@@ -98,39 +131,10 @@ async function terminal(session) {
   if (session.status === "FAILED") {
     const failureText =
       session.failureMessage || "인증에 실패했어요. 인증서를 다시 선택해 주세요.";
-    $("authenticationFailureText").textContent = failureText;
-    await new Promise((resolve) => {
-      const dialog = $("authenticationFailure");
-      const finish = () => {
-        dialog.removeEventListener("close", finish);
-        $("retryAuthentication").removeEventListener("click", finish);
-        resolve();
-      };
-      dialog.addEventListener("close", finish, { once: true });
-      $("retryAuthentication").addEventListener("click", finish, {
-        once: true,
-      });
-      dialog.showModal();
-    });
+    await showAuthenticationFailure("금융사 인증에 실패했어요", failureText, "다시 선택");
     if (terminalEpoch !== generation) return true;
     await window.certificate.retry();
-    if (terminalEpoch !== generation) return true;
-    const retryEpoch = ++generation;
-    clearTimeout(timer);
-    clearQr();
-    clearClaim();
-    clearCredentials();
-    selected = undefined;
-    $("progress").hidden = true;
-    $("registration").hidden = false;
-    $("submit").disabled = true;
-    step(2);
-    await discover(retryContext?.source || "auto");
-    if (retryEpoch !== generation) return true;
-    if (retryContext) $("organization").value = retryContext.organization;
-    requirements();
-    // The failure dialog already showed this error. Keep the retry form clear.
-    message("");
+    await restoreCertificateSelection(terminalEpoch);
     return true;
   }
   if (!["FAILED", "UNKNOWN", "EXPIRED", "CANCELLED"].includes(session.status))
@@ -369,10 +373,18 @@ $("registration").addEventListener("submit", async (event) => {
   } catch (error) {
     const text = await knownError(error);
     if (epoch !== generation) return;
-    stopped(
-      "입력 정보를 확인해 주세요",
-      text || "접수 결과를 확인한 뒤 다시 시도해 주세요.",
-    );
+    // INPUT/FILES fail before a registration request. Keep the paired device and bank.
+    if (/CERTIFICATE_SUBMIT_(INPUT|FILES)_/.test(error?.message || "")) {
+      clearCredentials();
+      selected = undefined;
+      await showAuthenticationFailure("입력 정보를 확인해 주세요", text || "인증서와 입력 정보를 확인해 주세요.");
+      await restoreCertificateSelection(epoch);
+    } else {
+      stopped(
+        "입력 정보를 확인해 주세요",
+        text || "접수 결과를 확인한 뒤 다시 시도해 주세요.",
+      );
+    }
   } finally {
     if (epoch === generation) {
       clearCredentials();
