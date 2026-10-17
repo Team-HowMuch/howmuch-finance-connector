@@ -167,3 +167,14 @@ rc.2는 PR의 모든 native 검증과 Release의 Windows/arm64 설치본을 통�
 - `HowMuch-Certificate-0.1.6-rc.3-dev-x64-Setup.exe`: 113416865 bytes.
 - `HowMuch-Certificate-0.1.6-rc.3-dev-x64.dmg`: 139548642 bytes.
 - 영문 파일명 수정은 앱 바이너리 변경이 아닌 배포 스크립트 후속 변경이며 PR branch에 함께 올린다. 원격 검증 결과는 이슈 #27 및 PR #28에 기록했다. PR은 임의로 머지하지 않았다.
+
+## 2026-10-15 인증서 앱 0.1.12 정식 게시 계획
+- 사용자 요청: rc.5 최신 수정본의 인증서 앱 정식 릴리즈. 백엔드 배포는 이번 요청 대상으로 지정되지 않았다.
+- 버전: 0.1.12, prod API https://api.howmuch.wars.p-e.kr. DB 변경 없음, migration 불필요.
+- 범위: 기존 코드 유지, package version/lock 갱신 및 로컬 Windows x64·Mac arm64/x64 설치 파일과 SHA-256 생성. 사용자 소유 manual HTML/proxy 변경은 제외.
+- 커밋 경계: build(certificate): 0.1.12 운영 릴리즈 버전 준비.
+- 검증: Node 전체/Electron smoke, 설치본 ASAR 버전·소스·prod API, Mac 서명/DMG 및 원격 체크섬 확인. Java 변경 없음.
+- 게시 전 확인: 현재 공개 prod API는 v3 은행 목록 401, claim organization 미필수인 구형 OpenAPI이다. 운영 백엔드 계약을 맞추지 않으면 새 앱 QR 연결이 불가하므로 설치 파일 준비와 운영 서버 배포를 구분한다.
+- 검증 완료: Node 52개, 실제 Electron synthetic smoke 및 PostgreSQL 준비 후 Gradle clean build 전체 통과. 임시 테스트 DB 제거.
+- Windows x64 NSIS, Mac arm64/x64 DMG 로컬 빌드 및 ASAR 코드·0.1.12 버전·prod API 일치 확인. Mac codesign deep strict/DMG 무결성, 모든 SHA-256 통과. 실제 Windows 실행 및 운영 인증 종단 검증은 미수행.
+- 사용자에게 운영 백엔드 갱신 포함 여부를 확인 중이며 정식 릴리즈는 우선 draft로 준비한다. dev/prod 동시 설치 앱 ID 분리는 이번 변경에 포함되지 않는다.

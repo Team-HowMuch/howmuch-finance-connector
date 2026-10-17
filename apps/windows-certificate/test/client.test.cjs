@@ -56,3 +56,45 @@ test("Cancelling a pending QR still calls the cancellation endpoint", async () =
   await client.cancel();
   assert.deepEqual(calls, ["POST", "DELETE"]);
 });
+
+test("submit failures preserve safe stage/reason while omitting raw error details", () => {
+  const { submissionErrorCode, userErrorMessage } = require("../src/client.cjs");
+  const error = Object.assign(new Error("private password /private/cert/key"), {code:"EACCES"});
+  const code = submissionErrorCode(error, "FILES");
+  assert.equal(code, "CERTIFICATE_SUBMIT_FILES_FILE_ACCESS_DENIED");
+  assert.ok(userErrorMessage(code).includes("인증서 파일 확인"));
+  assert.ok(!userErrorMessage(code).includes("private"));
+  assert.equal(submissionErrorCode(new Error("INVALID_INPUT"), "INPUT"), "CERTIFICATE_SUBMIT_INPUT_INPUT_INVALID");
+  assert.equal(submissionErrorCode(new Error("API_500"), "UPLOAD"), "CERTIFICATE_SUBMIT_UPLOAD_HTTP_500");
+  assert.ok(userErrorMessage("CERTIFICATE_SUBMIT_UPLOAD_HTTP_500").includes("HTTP 500"));
+  assert.equal(submissionErrorCode(new Error("BANK_CERTIFICATE_PASSWORD_INVALID"), "UPLOAD"), "BANK_CERTIFICATE_PASSWORD_INVALID");
+  assert.equal(submissionErrorCode(new Error("unknown private details"), "REGISTRATION"), "CERTIFICATE_SUBMIT_REGISTRATION_FAILED");
+  assert.equal(submissionErrorCode(new Error("unknown"), "private"), "OPERATION_FAILED");
+  assert.equal(userErrorMessage("CERTIFICATE_SUBMIT_FILES_PRIVATE_SECRET"), null);
+});
+
+test("SMS wait only crosses IPC as presentation state", async () => {
+  const id = "00000000-0000-4000-8000-000000000001";
+  let auth;
+  const client = new CertificateClient("http://127.0.0.1:18081", async () => new Response(JSON.stringify({
+    success: true, data: { id, status: "REGISTERING", pcCapability: "a".repeat(43), uploadCapability: "b".repeat(43), additionalAuthentication: auth },
+  })), true);
+  await client.create("0020");
+  auth = { method: "SMS", status: "WAITING_INPUT", expiresAt: "2030-01-01T00:03:00", cancelRequested: false,
+    code: "123456", twoWayInfo: "synthetic-private-context", encryptedPayload: "synthetic-ciphertext", challengeId: id };
+  const state = await client.status();
+  assert.deepEqual(state.additionalAuthentication, { method: "SMS", status: "WAITING_INPUT", expiresAt: "2030-01-01T00:03:00", cancelRequested: false });
+  assert.equal(JSON.stringify(state).includes("private-context"), false);
+  assert.equal(JSON.stringify(state).includes("123456"), false);
+  auth.status = "SUBMITTED";
+  assert.equal((await client.status()).additionalAuthentication.status, "SUBMITTED");
+  auth.status = "WAITING_INPUT";
+  auth.failureCode = "AUTH_SMS_RETRY_REQUIRED";
+  const retry = (await client.status()).additionalAuthentication;
+  assert.equal(retry.retryRequired, true);
+  assert.equal(retry.failureCode, undefined);
+  assert.equal(retry.challengeId, undefined);
+  assert.equal(retry.twoWayInfo, undefined);
+  auth.method = "ARS";
+  await assert.rejects(client.status(), /INVALID_RESPONSE/);
+});
