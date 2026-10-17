@@ -407,6 +407,20 @@ async function poll(epoch = generation) {
       return;
     }
     message("");
+    const additional = s.additionalAuthentication;
+    if (s.status === "REGISTERING" && additional && ["WAITING_INPUT", "SUBMITTED", "PROCESSING"].includes(additional.status)) {
+      clearQr();
+      clearClaim();
+      step(3);
+      $("refreshQr").hidden = true;
+      $("progress").dataset.state = "processing";
+      $("progressTitle").textContent = additional.cancelRequested ? "인증 취소 중" :
+        additional.status === "WAITING_INPUT" ? additional.retryRequired ? "휴대폰에서 인증번호를 다시 입력해 주세요" : "휴대폰에서 SMS 인증을 진행해 주세요" : "SMS 인증 확인 중";
+      details(additional.cancelRequested ? "" : additional.status === "WAITING_INPUT"
+        ? "휴대폰에 표시된 인증 모달에서 진행해 주세요." : "금융사에서 인증번호를 확인하고 있어요.");
+      if (epoch === generation) timer = setTimeout(() => poll(epoch), 2000);
+      return;
+    }
     if (s.status === "READY_FOR_CLAIM") {
       step(3);
       $("progress").dataset.state = "ready";

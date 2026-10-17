@@ -78,3 +78,26 @@ test("cancellation while a dialog is open cannot restore a stale form",async()=>
   assert.equal(f.node("registration").hidden,true);
   assert.equal(f.calls.discover,0);
 });
+
+test("SMS input waits on mobile without restarting QR or opening a failure modal", async () => {
+  const f = fixture("unused");
+  await f.seed();
+  f.context.window.certificate.status = async () => ({ status: "REGISTERING", expiresAt: "2030-01-01T00:10:00",
+    additionalAuthentication: { method: "SMS", status: "WAITING_INPUT", expiresAt: "2030-01-01T00:03:00" } });
+  await vm.runInContext("poll()", f.context);
+  assert.equal(f.node("progressTitle").textContent, "휴대폰에서 SMS 인증을 진행해 주세요");
+  assert.equal(f.node("authenticationFailure").open, false);
+  assert.equal(f.node("qrImage").hidden, true);
+  assert.equal(f.node("claimBox").hidden, true);
+  assert.equal(f.calls.pair, 0);
+  f.context.window.certificate.status = async () => ({ status: "REGISTERING", expiresAt: "2030-01-01T00:10:00",
+    additionalAuthentication: { method: "SMS", status: "WAITING_INPUT", expiresAt: "2030-01-01T00:03:00", retryRequired: true } });
+  await vm.runInContext("poll()", f.context);
+  assert.equal(f.node("progressTitle").textContent, "휴대폰에서 인증번호를 다시 입력해 주세요");
+  assert.equal(f.node("authenticationFailure").open, false);
+  assert.equal(f.calls.pair, 0);
+  f.context.window.certificate.status = async () => ({ status: "REGISTERING", expiresAt: "2030-01-01T00:10:00",
+    additionalAuthentication: { method: "SMS", status: "PROCESSING", expiresAt: "2030-01-01T00:03:00" } });
+  await vm.runInContext("poll()", f.context);
+  assert.equal(f.node("progressTitle").textContent, "SMS 인증 확인 중");
+});

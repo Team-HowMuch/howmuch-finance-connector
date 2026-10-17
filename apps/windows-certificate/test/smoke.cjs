@@ -16,6 +16,7 @@ let server,
   expired = false,
   status = "CREATED",
   failureCode,
+  additionalAuthentication,
   uploads = 0,
   creates = 0,
   mobileCancelled = false,
@@ -44,6 +45,8 @@ async function wait(w, expression, label) {
   assert.fail(label);
 }
 async function capture(w, name) {
+  w.webContents.setBackgroundThrottling(false);
+  await new Promise(resolve => setTimeout(resolve, 350));
   await fs.mkdir(path.join(__dirname, "../dist"), { recursive: true });
   await fs.writeFile(
     path.join(__dirname, "../dist", name),
@@ -135,7 +138,7 @@ async function run() {
       status = "CREATED";
       return send(null);
     }
-    return send({ id, status, failureCode, expiresAt: expiry() });
+    return send({ id, status, failureCode, additionalAuthentication, expiresAt: expiry() });
   });
   const port = 34000 + Math.floor(Math.random() * 10000);
   server.listen(port, "127.0.0.1");
@@ -237,6 +240,12 @@ async function run() {
     ),
     true,
   );
+  additionalAuthentication = { method: "SMS", status: "WAITING_INPUT", expiresAt: expiry(), cancelRequested: false };
+  await wait(w, 'document.getElementById("progressTitle").textContent === "휴대폰에서 SMS 인증을 진행해 주세요"', "PC must wait for mobile SMS input");
+  await capture(w, "electron-sms-wait-smoke.png");
+  additionalAuthentication.status = "PROCESSING";
+  await wait(w, 'document.getElementById("progressTitle").textContent === "SMS 인증 확인 중"', "PC must show SMS continuation progress");
+  additionalAuthentication = null;
   status = "READY_FOR_CLAIM";
   await wait(
     w,

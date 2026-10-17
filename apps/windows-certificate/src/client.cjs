@@ -189,7 +189,16 @@ class CertificateClient {
       expiresAt: s.expiresAt,
       failureCode,
       failureMessage: userErrorMessage(failureCode),
+      additionalAuthentication: this.#additionalAuthentication(s.additionalAuthentication),
     };
+  }
+  #additionalAuthentication(value) {
+    if (value == null) return null;
+    if (value.method !== "SMS" || !["WAITING_INPUT", "SUBMITTED", "PROCESSING", "SUCCEEDED", "FAILED", "UNKNOWN", "CANCELLED", "EXPIRED"].includes(value.status)
+        || !Number.isFinite(Date.parse(`${value.expiresAt}Z`))) throw new Error("INVALID_RESPONSE");
+    // PC only needs presentation state. No SMS value, continuation data, or new capability crosses IPC.
+    return { method: "SMS", status: value.status, expiresAt: value.expiresAt, cancelRequested: value.cancelRequested === true,
+      ...(value.failureCode === "AUTH_SMS_RETRY_REQUIRED" ? { retryRequired: true } : {}) };
   }
   #id() {
     if (!this.#session) throw new Error("NO_SESSION");
