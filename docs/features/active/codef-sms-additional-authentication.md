@@ -5,7 +5,7 @@
 - 안전한 AUTH_SMS_RETRY_REQUIRED 상태일 때만 재입력 안내를 표시한다. 인증번호/continuation/개인키는 IPC에 추가하지 않는다.
 - 기존 pairing polling과 최종 승인 경로를 유지한다. unit/smoke로 대기→재입력→확인 중→승인 및 취소를 검증한다. DB 변경은 없다.
 
-- 상태: 로컬 구현 완료, 사용자 승인에 따른 PR 및 dev/prod 릴리즈 발행 준비.
+- 상태: 로컬 검증 완료, PR #49 및 dev/prod Release 게시. 설치 파일 검증은 각 Release workflow 결과를 따른다.
 - 서버는 기존 인증서를 REGISTERING으로 유지하면서 additionalAuthentication으로 SMS 입력 대기를 제공한다.
 - PC는 인증번호를 입력받지 않고 휴대폰 입력 안내만 표시한다. 모달 열기/닫기와 인증번호 제출은 모바일 API의 책임이다.
 - 인증번호/재개 토큰/개인키는 renderer로 전달하지 않는다. Client에서 안전한 상태·만료시각만 전달한다.
@@ -34,3 +34,9 @@
 - 모바일 SMS 모달과 실은행 SMS 검증은 별도다. 서버 연동 계약은 backend `codef-sms-additional-authentication-runbook.md`에 기록했다.
 
 - 원격 develop 브랜치가 삭제되어 기본 브랜치 main으로 PR/CI/문서 기준을 일치시켰다.
+
+## 원격 결과
+- PR: https://github.com/Team-HowMuch/howmuch-finance-connector/pull/49 (main 대상, 미병합)
+- dev: https://github.com/Team-HowMuch/howmuch-finance-connector/releases/tag/certificate-v0.1.13-rc.1
+- prod: https://github.com/Team-HowMuch/howmuch-finance-connector/releases/tag/certificate-v0.1.13
+- 원격 PR의 Java CI와 Windows/macOS arm64/x64 패키징 실행 검증 통과. 최종 설치 파일 생성·첨부는 Release의 installer/publish job에서 검증한다.
