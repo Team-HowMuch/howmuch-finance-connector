@@ -5,11 +5,11 @@
 ```bash
 pwd
 git status --short --untracked-files=all
-git fetch origin develop
-gh pr list --base develop --state open
+git fetch origin main
+gh pr list --base main --state open
 ```
 
-루트와 작업 경로의 `AGENTS.md`, 관련 문서와 Feature Plan을 읽고 최신 `origin/develop`에서 branch를 만든다.
+루트와 작업 경로의 `AGENTS.md`, 관련 문서와 Feature Plan을 읽고 최신 `origin/main`에서 branch를 만든다.
 
 ## Flyway gate
 
@@ -18,7 +18,7 @@ Persistence schema가 필요하면 다음 순서를 지킨다.
 1. 최신 migration 번호와 열린 migration PR을 확인한다.
 2. migration 전용 branch에서 단 하나의 versioned SQL만 추가한다.
 3. 실제 PostgreSQL에서 migration을 검증한다.
-4. commit, push, `develop` 대상 PR을 만든다.
+4. commit, push, `main` 대상 PR을 만든다.
 5. PR URL을 보고하고 작업을 종료한다.
 
 Feature Plan, Java, 설정, 테스트를 migration-only PR에 섞지 않는다.

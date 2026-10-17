@@ -12,7 +12,7 @@
 2. 루트와 작업 경로에 가까운 `AGENTS.md`를 모두 읽는다.
 3. `docs/architecture.md`, `docs/coding-guidelines.md`, `docs/development-workflow.md`, 관련 Feature Plan을 읽는다.
 4. 변경할 호출 경로와 같은 역할의 기존 구현을 `rg`로 조사한다.
-5. 최신 `origin/develop`과 열린 migration PR을 확인한다.
+5. 최신 `origin/main`과 열린 migration PR을 확인한다.
 6. 사용자 변경은 건드리지 않고 별도 branch에서 작업한다.
 
 ## 프로젝트 구조
@@ -51,11 +51,11 @@ Web Request DTO
 
 - endpoint, domain, persistence, 외부 연동 또는 여러 package를 바꾸는 작업은 `docs/templates/feature-plan.md`를 복사해 한국어 Feature Plan을 먼저 작성한다.
 - migration이 필요한 최초 작업은 단 하나의 versioned SQL만 포함한 migration-only PR을 먼저 만들고 즉시 종료한다.
-- migration 번호는 최신 `origin/develop`과 열린 PR을 확인한 뒤 정한다.
+- migration 번호는 최신 `origin/main`과 열린 PR을 확인한 뒤 정한다.
 
 ## Branch, Issue, PR, Commit
 
-- 최신 `develop`에서 branch를 만들고 PR 대상도 `develop`으로 한다.
+- 최신 `main`에서 branch를 만들고 PR 대상도 `main`으로 한다.
 - branch prefix는 `feat/`, `fix/`, `build/`, `test/`, `docs/`를 사용한다.
 - 이슈 제목은 `[Enhancement] ...`, `[Bug] ...`, `[Test] ...`를 사용한다.
 - 이슈 본문은 `현재 상황 / 확인 근거 / 기대 효과 / 작업 범위 / 완료 조건 / 관련 이슈` 순서로 작성한다.

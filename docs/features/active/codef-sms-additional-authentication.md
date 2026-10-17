@@ -14,10 +14,10 @@
 - 커밋 경계: PC SMS 대기 표시·테스트·문서, dev 프리릴리즈 버전, prod 정식 버전으로 구분한다.
 
 ## 2026-10-18 발행 계획
-- develop 대상 기능 PR과 별도로 certificate-v0.1.13-rc.1(dev), certificate-v0.1.13(prod)을 게시한다.
+- main 대상 기능 PR과 별도로 certificate-v0.1.13-rc.1(dev), certificate-v0.1.13(prod)을 게시한다.
 - 각 태그의 package.json/package-lock.json 버전을 일치시키고 기존 release workflow와 Environment 변수를 사용한다.
 - Windows x64, macOS arm64/x64 설치 파일 및 SHA-256 첨부를 확인한다. macOS는 기존 ad-hoc 서명을 유지한다.
-- 0.1.12에 이미 배포됐지만 develop에 병합되지 않은 입력 오류 모달 수정 커밋을 유지한다. 닫힌 PR #47의 변경을 제거해 기존 앱 동작을 되돌리지 않는다.
+- 0.1.12에 이미 배포됐지만 main에 병합되지 않은 입력 오류 모달 수정 커밋을 유지한다. 닫힌 PR #47의 변경을 제거해 기존 앱 동작을 되돌리지 않는다.
 - 백엔드/모바일 PR은 이번 발행 범위에 포함하지 않는다. 새 SMS 상태를 반환하지 않는 서버에서는 기존 인증 흐름을 유지한다.
 
 ## 검증 결과
@@ -32,3 +32,5 @@
 - `npm ci --prefix apps/windows-certificate --ignore-scripts`로 의존성을 설치했고, 기존 로컬 Electron 실행 파일로 이 워크트리의 smoke를 실행했다. Windows 패키지나 release는 빌드하지 않았다.
 - 서버 설정 `CODEF_SMS_ADDITIONAL_AUTH_ENABLED=true`가 켜져 있고 신규 서버가 additionalAuthentication을 반환할 때 표시한다. 기존 서버 응답에서는 이전 흐름을 유지한다.
 - 모바일 SMS 모달과 실은행 SMS 검증은 별도다. 서버 연동 계약은 backend `codef-sms-additional-authentication-runbook.md`에 기록했다.
+
+- 원격 develop 브랜치가 삭제되어 기본 브랜치 main으로 PR/CI/문서 기준을 일치시켰다.
